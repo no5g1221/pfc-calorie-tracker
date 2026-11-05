@@ -1,7 +1,8 @@
-import type { AppState, PresetItem } from '../types';
+import type { AppState, IntakeLogItem, PresetItem } from '../types';
 import { calcTargetMacros, getTodayDateString } from './calculations';
 
 export const STORAGE_KEY = 'pfc_tracker_app_state';
+export const HISTORY_ARCHIVE_KEY = 'pfc_tracker_daily_archives';
 
 // ユーザー指定の厳密な初期プリセット（8品目）
 export const DEFAULT_PRESETS: PresetItem[] = [
@@ -114,11 +115,56 @@ export function getDefaultAppState(): AppState {
 }
 
 /**
- * LocalStorageから状態を読み込み、日付変更時のデータハンドリングを実行
- * 日付が異なっていた場合：
- * - target（目標設定）および presets（食材パーツ）は絶対に消さずそのまま維持
- * - todayLogs（当日の摂取履歴）のみを空配列 [] に初期化
- * - lastActiveDate を本日の日付に更新して保存
+ * 過去アーカイブ一覧（日付別ログ）を取得
+ */
+export function getDailyArchives(): Record<string, IntakeLogItem[]> {
+  try {
+    const raw = localStorage.getItem(HISTORY_ARCHIVE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 特定の日付のログを取得（該当日にログがなければ空配列）
+ */
+export function getLogsForDate(date: string, todayLogs: IntakeLogItem[]): IntakeLogItem[] {
+  const today = getTodayDateString();
+  if (date === today) {
+    return todayLogs;
+  }
+  const archives = getDailyArchives();
+  return archives[date] || [];
+}
+
+/**
+ * 特定の日付のログを保存
+ */
+export function saveLogsForDate(date: string, logs: IntakeLogItem[]): void {
+  try {
+    const archives = getDailyArchives();
+    archives[date] = logs;
+    localStorage.setItem(HISTORY_ARCHIVE_KEY, JSON.stringify(archives));
+  } catch (e) {
+    console.error('Failed to save logs for date:', e);
+  }
+}
+
+/**
+ * 記録が存在する日付の一覧（YYYY-MM-DD）を取得
+ */
+export function getDatesWithLogs(todayLogs: IntakeLogItem[]): string[] {
+  const archives = getDailyArchives();
+  const dates = new Set<string>(Object.keys(archives).filter(d => archives[d] && archives[d].length > 0));
+  if (todayLogs.length > 0) {
+    dates.add(getTodayDateString());
+  }
+  return Array.from(dates);
+}
+
+/**
+ * LocalStorageから状態を読み込み、日付変更時のハンドリングを実行
  */
 export function loadAppState(): AppState {
   const today = getTodayDateString();
@@ -132,20 +178,23 @@ export function loadAppState(): AppState {
 
     const state: AppState = JSON.parse(raw);
 
-    // 必須構造の安全チェック
     if (!state.target || !Array.isArray(state.presets) || !Array.isArray(state.todayLogs)) {
       const defaultState = getDefaultAppState();
       saveAppState(defaultState);
       return defaultState;
     }
 
-    // 日付判定
+    // 日付変更時のデータハンドリング
     if (state.lastActiveDate !== today) {
+      // 前日のログがあればアーカイブに退避
+      if (state.todayLogs && state.todayLogs.length > 0) {
+        saveLogsForDate(state.lastActiveDate, state.todayLogs);
+      }
+
       const updatedState: AppState = {
         ...state,
         lastActiveDate: today,
-        todayLogs: [], // 当日履歴のみ初期化
-        // target と presets はそのまま完全維持
+        todayLogs: [], // 当日の摂取履歴のみ空配列にリセット
       };
       saveAppState(updatedState);
       return updatedState;
@@ -160,12 +209,13 @@ export function loadAppState(): AppState {
   }
 }
 
-/**
- * LocalStorageへ状態を保存する
- */
 export function saveAppState(state: AppState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // 当日のアーカイブもリアルタイム同期
+    if (state.todayLogs) {
+      saveLogsForDate(state.lastActiveDate, state.todayLogs);
+    }
   } catch (error) {
     console.error('Failed to save app state to localStorage:', error);
   }
