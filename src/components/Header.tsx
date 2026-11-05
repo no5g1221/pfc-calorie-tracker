@@ -42,9 +42,11 @@ export const Header: React.FC<HeaderProps> = ({
       {/* 1行目: アプリロゴ & 各種メニューボタン */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-md shadow-sky-500/20 text-white font-black text-xs tracking-tight">
-            PFC
-          </div>
+          <img
+            src="/favicon.png"
+            alt="PFC Logo"
+            className="w-8 h-8 rounded-xl shadow-md shadow-sky-500/20 object-cover"
+          />
           <div>
             <h1 className="text-sm font-black tracking-tight text-white flex items-center gap-1 leading-none m-0">
               最速PFC管理
