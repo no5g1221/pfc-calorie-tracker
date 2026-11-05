@@ -19,7 +19,6 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'all'>('staple');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ユーザー要求のタブ構成: 「主食」「主菜・P」「副菜・他」
   const categories: { id: CategoryType | 'all'; label: string }[] = [
     { id: 'staple', label: '主食' },
     { id: 'main', label: '主菜・P' },
@@ -27,7 +26,7 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
     { id: 'all', label: 'すべて' },
   ];
 
-  // 本日のタップ回数（各プリセットの追加回数）をカウント
+  // 本日何回タップしたかのバッジ用カウント（本日全体の回数）
   const tapCounts: Record<string, number> = {};
   todayLogs.forEach((log) => {
     if (log.presetId) {
@@ -42,7 +41,6 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
   });
 
   const handleTap = (preset: PresetItem) => {
-    // 触覚フィードバック（スマホ振動）
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate(30);
@@ -59,7 +57,6 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
           定番パーツ（1タップで加算）
         </span>
 
-        {/* ユーザー指定の「パーツ編集」ボタン */}
         <button
           onClick={onOpenManageModal}
           className="flex items-center gap-1 text-xs font-bold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 px-3 py-1.5 rounded-xl transition-all active:scale-95"
@@ -122,7 +119,6 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
                 </span>
               )}
 
-              {/* 上部: 食材名と基準量 */}
               <div>
                 <p className="font-bold text-sm text-white group-hover:text-sky-300 transition-colors leading-tight truncate">
                   {preset.name}
@@ -134,7 +130,6 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
                 </p>
               </div>
 
-              {/* 下部: PFC内訳と+加算 */}
               <div className="mt-2.5 pt-1.5 border-t border-slate-800/80 flex items-center justify-between w-full">
                 <div className="flex items-center gap-1.5 text-[10px] font-mono">
                   <span className="text-sky-400 font-bold">P:{preset.baseP}</span>

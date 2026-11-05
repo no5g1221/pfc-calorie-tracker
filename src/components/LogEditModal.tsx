@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import type { IntakeLogItem } from '../types';
-import { calcCalories, round1 } from '../utils/calculations';
+import type { IntakeLogItem, MealType } from '../types';
+import { calcCalories, round1, getDefaultMealType } from '../utils/calculations';
 import { X, Check, Trash2, Scale } from 'lucide-react';
 
 interface LogEditModalProps {
   log: IntakeLogItem | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (id: string, newAmount: number) => void;
+  onSave: (id: string, newAmount: number, newMealType: MealType) => void;
   onDelete: (id: string) => void;
 }
+
+const mealOptions: { id: MealType; label: string; icon: string }[] = [
+  { id: 'breakfast', label: '朝食', icon: '🌅' },
+  { id: 'lunch', label: '昼食', icon: '☀️' },
+  { id: 'dinner', label: '夕食', icon: '🌙' },
+  { id: 'snack', label: '間食', icon: '☕' },
+];
 
 export const LogEditModal: React.FC<LogEditModalProps> = ({
   log,
@@ -19,10 +26,12 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
   onDelete,
 }) => {
   const [amount, setAmount] = useState<number>(0);
+  const [mealType, setMealType] = useState<MealType>('lunch');
 
   useEffect(() => {
     if (log) {
       setAmount(log.currentAmount);
+      setMealType(log.mealType || getDefaultMealType(new Date(log.timestamp)));
     }
   }, [log, isOpen]);
 
@@ -34,12 +43,10 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
   const previewC = round1(log.baseC * ratio);
   const previewCal = calcCalories(previewP, previewF, previewC);
 
-  // 表示名のリアルタイムプレビュー（例: 「白米 120g」）
   const baseName = log.name.replace(/\s+\d+(\.\d+)?[^\s]*$/, '');
   const formattedAmount = Number.isInteger(amount) ? amount : round1(amount);
   const previewDisplayName = `${baseName} ${formattedAmount}${log.unit}`;
 
-  // ユーザー要件指定の倍率ボタン: 0.5倍、1倍、1.5倍、2倍
   const multipliers = [
     { label: '0.5倍', value: 0.5 },
     { label: '1倍', value: 1.0 },
@@ -53,7 +60,7 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
   };
 
   const handleSave = () => {
-    onSave(log.id, Math.max(0, amount));
+    onSave(log.id, Math.max(0, amount), mealType);
     onClose();
   };
 
@@ -86,6 +93,31 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
           </button>
         </div>
 
+        {/* 食事区分の変更（朝/昼/晩/間食） */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-300">食事区分</label>
+          <div className="grid grid-cols-4 gap-1.5">
+            {mealOptions.map((m) => {
+              const isSelected = mealType === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMealType(m.id)}
+                  className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                    isSelected
+                      ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>{m.icon}</span>
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* リアルタイム再計算プレビューカード */}
         <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 space-y-2">
           <div className="flex items-baseline justify-between">
@@ -110,7 +142,7 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
           </div>
         </div>
 
-        {/* ユーザー要件: 倍率ボタン（0.5倍、1倍、1.5倍、2倍） */}
+        {/* 倍率ボタン */}
         <div className="space-y-1.5">
           <label className="text-xs font-bold text-slate-300">
             倍率ボタン（基準量: {log.baseAmount}{log.unit}）
@@ -136,7 +168,7 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
           </div>
         </div>
 
-        {/* ユーザー要件: 数値直接入力（実際に食べた量を入力） */}
+        {/* 数値直接入力 */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-300">
@@ -163,7 +195,6 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
 
         {/* アクションボタン: 削除 & 保存 */}
         <div className="flex gap-2 pt-2">
-          {/* 削除ボタン */}
           <button
             type="button"
             onClick={handleDelete}
@@ -173,7 +204,6 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
             <Trash2 className="w-5 h-5" />
           </button>
 
-          {/* キャンセル */}
           <button
             type="button"
             onClick={onClose}
@@ -182,7 +212,6 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
             キャンセル
           </button>
 
-          {/* 保存 */}
           <button
             type="button"
             onClick={handleSave}

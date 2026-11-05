@@ -1,4 +1,4 @@
-import type { IntakeLogItem, PresetItem } from '../types';
+import type { IntakeLogItem, PresetItem, MealType } from '../types';
 
 /**
  * ユーティリティ関数: 小数第1位に四捨五入する（浮動小数点丸め誤差防止）
@@ -18,9 +18,6 @@ export const calcCalories = (p: number, f: number, c: number): number => {
 
 /**
  * 目標カロリーとPFC比率から目標PFCグラム数を自動換算
- * targetP = round1((calories * (pRatio / 100)) / 4)
- * targetF = round1((calories * (fRatio / 100)) / 9)
- * targetC = round1((calories * (cRatio / 100)) / 4)
  */
 export const calcTargetMacros = (calories: number, pRatio: number, fRatio: number, cRatio: number) => {
   const targetP = round1((calories * (pRatio / 100)) / 4);
@@ -41,9 +38,28 @@ export const getTodayDateString = (): string => {
 };
 
 /**
+ * 現在の時刻からデフォルトの食事区分を判定
+ * 04:00〜10:59: 朝食
+ * 11:00〜16:59: 昼食
+ * 17:00〜21:59: 夕食
+ * 22:00〜03:59: 間食/夜食
+ */
+export const getDefaultMealType = (date: Date = new Date()): MealType => {
+  const hour = date.getHours();
+  if (hour >= 4 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 17) return 'lunch';
+  if (hour >= 17 && hour < 22) return 'dinner';
+  return 'snack';
+};
+
+/**
  * プリセット食材から指定量でのIntakeLogItemを生成
  */
-export const createLogFromPreset = (preset: PresetItem, amount?: number): IntakeLogItem => {
+export const createLogFromPreset = (
+  preset: PresetItem,
+  amount?: number,
+  mealType?: MealType
+): IntakeLogItem => {
   const currentAmount = amount !== undefined ? round1(amount) : preset.baseAmount;
   const ratio = preset.baseAmount > 0 ? currentAmount / preset.baseAmount : 1;
 
@@ -51,7 +67,6 @@ export const createLogFromPreset = (preset: PresetItem, amount?: number): Intake
   const currentF = round1(preset.baseF * ratio);
   const currentC = round1(preset.baseC * ratio);
 
-  // 表示名: 例 "白米 150g"
   const formattedAmount = Number.isInteger(currentAmount) ? currentAmount : round1(currentAmount);
   const displayName = `${preset.name} ${formattedAmount}${preset.unit}`;
 
@@ -69,13 +84,18 @@ export const createLogFromPreset = (preset: PresetItem, amount?: number): Intake
     currentF,
     currentC,
     timestamp: Date.now(),
+    mealType: mealType || getDefaultMealType(),
   };
 };
 
 /**
- * ログアイテムの量(currentAmount)を再計算して新しいオブジェクトを返す
+ * ログアイテムの量(currentAmount)や食事区分を再計算して新しいオブジェクトを返す
  */
-export const recalculateLogItem = (item: IntakeLogItem, newAmount: number): IntakeLogItem => {
+export const recalculateLogItem = (
+  item: IntakeLogItem,
+  newAmount: number,
+  newMealType?: MealType
+): IntakeLogItem => {
   const safeAmount = Math.max(0, round1(newAmount));
   const ratio = item.baseAmount > 0 ? safeAmount / item.baseAmount : 1;
 
@@ -83,7 +103,6 @@ export const recalculateLogItem = (item: IntakeLogItem, newAmount: number): Inta
   const currentF = round1(item.baseF * ratio);
   const currentC = round1(item.baseC * ratio);
 
-  // 元の食材名（末尾の数値・単位を除去したもの）を取得して、新しい量を付け直す
   const baseName = item.name.replace(/\s+\d+(\.\d+)?[^\s]*$/, '');
   const formattedAmount = Number.isInteger(safeAmount) ? safeAmount : round1(safeAmount);
   const newName = `${baseName} ${formattedAmount}${item.unit}`;
@@ -95,11 +114,12 @@ export const recalculateLogItem = (item: IntakeLogItem, newAmount: number): Inta
     currentP,
     currentF,
     currentC,
+    mealType: newMealType !== undefined ? newMealType : (item.mealType || getDefaultMealType(new Date(item.timestamp))),
   };
 };
 
 /**
- * 今日の摂取ログの合計値を計算（round1で加算丸め）
+ * ログの合計値を計算
  */
 export const calculateTotals = (logs: IntakeLogItem[]) => {
   return logs.reduce(

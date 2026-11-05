@@ -1,25 +1,42 @@
 import React, { useState } from 'react';
-import type { IntakeLogItem } from '../types';
+import type { IntakeLogItem, MealType } from '../types';
 import { calcCalories, round1 } from '../utils/calculations';
 import { X, Check, UtensilsCrossed } from 'lucide-react';
 
 interface QuickAddModalProps {
   isOpen: boolean;
+  defaultMealType: MealType;
   onClose: () => void;
   onAdd: (log: IntakeLogItem) => void;
 }
 
+const mealOptions: { id: MealType; label: string; icon: string }[] = [
+  { id: 'breakfast', label: '朝食', icon: '🌅' },
+  { id: 'lunch', label: '昼食', icon: '☀️' },
+  { id: 'dinner', label: '夕食', icon: '🌙' },
+  { id: 'snack', label: '間食', icon: '☕' },
+];
+
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   isOpen,
+  defaultMealType,
   onClose,
   onAdd,
 }) => {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState<number>(1);
   const [unit, setUnit] = useState('人前');
+  const [mealType, setMealType] = useState<MealType>(defaultMealType);
   const [p, setP] = useState<number>(0);
   const [f, setF] = useState<number>(0);
   const [c, setC] = useState<number>(0);
+
+  // モーダルが開かれた時にdefaultMealTypeをセット
+  React.useEffect(() => {
+    if (isOpen) {
+      setMealType(defaultMealType);
+    }
+  }, [isOpen, defaultMealType]);
 
   if (!isOpen) return null;
 
@@ -47,10 +64,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       currentF,
       currentC,
       timestamp: Date.now(),
+      mealType,
     };
 
     onAdd(newLog);
-    // フォームリセット
     setName('');
     setAmount(1);
     setUnit('人前');
@@ -70,7 +87,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
             </div>
             <div>
               <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">自由入力</span>
-              <h3 className="text-lg font-bold text-white">外食・単品の即時記録</h3>
+              <h3 className="text-base font-bold text-white">外食・単品の即時記録</h3>
             </div>
           </div>
           <button
@@ -81,7 +98,29 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* 食事区分の選択 */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-300">記録先</label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {mealOptions.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMealType(m.id)}
+                  className={`py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                    mealType === m.id
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <span>{m.icon}</span>
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1">メニュー・品名</label>
             <input
@@ -90,11 +129,11 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
               placeholder="例: プロテインバー、外食ランチ"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1">量</label>
               <input
@@ -104,7 +143,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 required
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-purple-500"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-purple-500"
               />
             </div>
             <div>
@@ -115,13 +154,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 placeholder="例: 個, 人前, 本"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
               />
             </div>
           </div>
 
-          {/* PFC入力 */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-300">PFC入力</span>
               <span className="text-xs font-bold text-orange-400">{cal} kcal</span>
@@ -136,7 +174,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   min="0"
                   value={p}
                   onChange={(e) => setP(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2.5 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
+                  className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                 />
               </div>
               <div>
@@ -147,7 +185,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   min="0"
                   value={f}
                   onChange={(e) => setF(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2.5 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
+                  className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
               <div>
@@ -158,13 +196,13 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   min="0"
                   value={c}
                   onChange={(e) => setC(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2.5 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex gap-2.5 pt-2">
+          <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}

@@ -1,3 +1,11 @@
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface MealInfo {
+  id: MealType;
+  label: string;
+  icon: string;
+}
+
 // プリセット（食材パーツ）の型定義
 export interface PresetItem {
   id: string;
@@ -25,6 +33,7 @@ export interface IntakeLogItem {
   currentF: number;       // 計算後のF = round1(baseF * (currentAmount / baseAmount))
   currentC: number;       // 計算後のC = round1(baseC * (currentAmount / baseAmount))
   timestamp: number;
+  mealType?: MealType;    // 朝食 / 昼食 / 夕食 / 間食
 }
 
 // アプリ全体のLocalStorage保存型定義
@@ -44,9 +53,3 @@ export interface AppState {
 }
 
 export type CategoryType = 'staple' | 'main' | 'sub';
-
-export interface CategoryInfo {
-  id: CategoryType;
-  label: string;
-  color: string;
-}
