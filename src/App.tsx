@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { AppState, IntakeLogItem, PresetItem, MealType } from './types';
 import {
   loadAppState,
@@ -11,6 +11,7 @@ import {
   createLogFromPreset,
   recalculateLogItem,
   calcCalories,
+  calculateTotals,
   getDefaultMealType,
   getTodayDateString,
 } from './utils/calculations';
@@ -26,10 +27,14 @@ import { QuickAddModal } from './components/QuickAddModal';
 import { DataBackupModal } from './components/DataBackupModal';
 import { CalendarModal } from './components/CalendarModal';
 import { Toast, type ToastMessage } from './components/Toast';
+import { GoalCelebration } from './components/GoalCelebration';
+
+type MetricKey = 'calories' | 'p' | 'f' | 'c';
 
 export function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [isCelebrationVisible, setIsCelebrationVisible] = useState(false);
 
   // 表示・記録対象の日付（YYYY-MM-DD）
   const today = getTodayDateString();
@@ -46,10 +51,92 @@ export function App() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [selectedLogForEdit, setSelectedLogForEdit] = useState<IntakeLogItem | null>(null);
 
+  // 日付ごとの目標達成演出発火済みフラグ（微調整による再発火防止）
+  const celebratedByDateRef = useRef<Record<string, Set<MetricKey>>>({});
+
   // 選択中日付のログ一覧を取得
   const currentLogs = useMemo(() => {
     return getLogsForDate(selectedDate, appState.todayLogs);
   }, [selectedDate, appState.todayLogs]);
+
+  // 初回または日付切替時に、既に100%を超えている項目を発火済みとしてマーク（画面表示直後の誤発火防止）
+  useEffect(() => {
+    if (!celebratedByDateRef.current[selectedDate]) {
+      const set = new Set<MetricKey>();
+      const totals = calculateTotals(currentLogs);
+      const { target } = appState;
+      if (target.calories > 0 && totals.totalCalories >= target.calories) set.add('calories');
+      if (target.targetP > 0 && totals.totalP >= target.targetP) set.add('p');
+      if (target.targetF > 0 && totals.totalF >= target.targetF) set.add('f');
+      if (target.targetC > 0 && totals.totalC >= target.targetC) set.add('c');
+      celebratedByDateRef.current[selectedDate] = set;
+    }
+  }, [selectedDate, currentLogs, appState]);
+
+  // 目標達成判定＆セレブレーション発火チェック
+  const checkGoalAchievement = useCallback(
+    (prevLogs: IntakeLogItem[], nextLogs: IntakeLogItem[]) => {
+      const prevTotals = calculateTotals(prevLogs);
+      const nextTotals = calculateTotals(nextLogs);
+      const { target } = appState;
+
+      if (!celebratedByDateRef.current[selectedDate]) {
+        celebratedByDateRef.current[selectedDate] = new Set<MetricKey>();
+      }
+      const celebratedSet = celebratedByDateRef.current[selectedDate];
+
+      let newlyAchieved = false;
+
+      // 1. 総カロリーが初めて100%に達したか
+      if (
+        target.calories > 0 &&
+        prevTotals.totalCalories < target.calories &&
+        nextTotals.totalCalories >= target.calories &&
+        !celebratedSet.has('calories')
+      ) {
+        celebratedSet.add('calories');
+        newlyAchieved = true;
+      }
+
+      // 2. P（タンパク質）が初めて100%に達したか
+      if (
+        target.targetP > 0 &&
+        prevTotals.totalP < target.targetP &&
+        nextTotals.totalP >= target.targetP &&
+        !celebratedSet.has('p')
+      ) {
+        celebratedSet.add('p');
+        newlyAchieved = true;
+      }
+
+      // 3. F（脂質）が初めて100%に達したか
+      if (
+        target.targetF > 0 &&
+        prevTotals.totalF < target.targetF &&
+        nextTotals.totalF >= target.targetF &&
+        !celebratedSet.has('f')
+      ) {
+        celebratedSet.add('f');
+        newlyAchieved = true;
+      }
+
+      // 4. C（炭水化物）が初めて100%に達したか
+      if (
+        target.targetC > 0 &&
+        prevTotals.totalC < target.targetC &&
+        nextTotals.totalC >= target.targetC &&
+        !celebratedSet.has('c')
+      ) {
+        celebratedSet.add('c');
+        newlyAchieved = true;
+      }
+
+      if (newlyAchieved) {
+        setIsCelebrationVisible(true);
+      }
+    },
+    [appState, selectedDate]
+  );
 
   // 記録が存在する日付一覧
   const loggedDates = useMemo(() => {
@@ -145,6 +232,7 @@ export function App() {
   const handleAddPresetToToday = (preset: PresetItem) => {
     const newLog = createLogFromPreset(preset, undefined, activeMealType);
     const updated = [newLog, ...currentLogs];
+    checkGoalAchievement(currentLogs, updated);
     updateLogsForSelectedDate(updated);
 
     const cal = calcCalories(newLog.currentP, newLog.currentF, newLog.currentC);
@@ -163,6 +251,7 @@ export function App() {
       }
       return log;
     });
+    checkGoalAchievement(currentLogs, updated);
     updateLogsForSelectedDate(updated);
     showToast('記録を更新しました');
   };
@@ -174,8 +263,9 @@ export function App() {
     showToast('記録を削除しました');
   };
 
-  // 表示中日付の記録全消去
+  // 表示中日付の記録全消去（リセット時は発火フラグもクリア）
   const handleClearAllLogs = () => {
+    celebratedByDateRef.current[selectedDate] = new Set<MetricKey>();
     updateLogsForSelectedDate([]);
     showToast('この日の記録を全消去しました');
   };
@@ -216,6 +306,7 @@ export function App() {
   // 自由入力の追加
   const handleQuickAdd = (log: IntakeLogItem) => {
     const updated = [log, ...currentLogs];
+    checkGoalAchievement(currentLogs, updated);
     updateLogsForSelectedDate(updated);
     const cal = calcCalories(log.currentP, log.currentF, log.currentC);
     const mealLabel = meals.find((m) => m.id === log.mealType)?.label || '';
@@ -240,6 +331,12 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-sky-500 selection:text-white pb-safe">
+      {/* 目標達成時のキャラクター祝福オーバーレイ演出 */}
+      <GoalCelebration
+        isVisible={isCelebrationVisible}
+        onComplete={() => setIsCelebrationVisible(false)}
+      />
+
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       {/* トップアプリバー（ロゴ、日付切替、各種モーダル起動） */}
