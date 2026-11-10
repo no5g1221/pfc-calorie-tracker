@@ -43,13 +43,13 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img
-            src="/favicon.png"
-            alt="PFC Logo"
+            src="/favicon.png?v=2"
+            alt="パプリカPFC Logo"
             className="w-8 h-8 rounded-xl shadow-md shadow-sky-500/20 object-cover border border-slate-700/60"
           />
           <div>
             <h1 className="text-sm font-black tracking-tight text-white flex items-center gap-1.5 leading-none m-0">
-              最速PFC管理
+              パプリカPFC
               <span className="text-[10px] font-bold text-sky-400 bg-sky-950/80 border border-sky-800/80 px-1.5 py-0.5 rounded-md">
                 自炊派
               </span>

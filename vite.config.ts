@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: '最速PFC・カロリー管理',
-        short_name: 'PFC最速管理',
+        name: 'パプリカPFC',
+        short_name: 'パプリカPFC',
         description: '自炊中心・固定食材派のための最速PFC・カロリー管理Webアプリ',
         theme_color: '#0f172a',
         background_color: '#0f172a',
