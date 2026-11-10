@@ -20,7 +20,6 @@ export const MealSelector: React.FC<MealSelectorProps> = ({
   onChangeMealType,
   todayLogs,
 }) => {
-  // 各食事区分の合計カロリーを算出
   const mealCalories: Record<MealType, number> = {
     breakfast: 0,
     lunch: 0,
@@ -39,14 +38,14 @@ export const MealSelector: React.FC<MealSelectorProps> = ({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1">
         <span className="text-[11px] font-bold text-slate-400">
-          記録先: <strong className="text-sky-400 font-bold">{meals.find(m => m.id === activeMealType)?.label}</strong> に加算中
+          記録先: <strong className="text-sky-400 font-extrabold">{meals.find(m => m.id === activeMealType)?.label}</strong> に加算中
         </span>
-        <span className="text-[10px] text-slate-500">
+        <span className="text-[10px] text-slate-500 font-medium">
           タップで切替
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 bg-slate-900/90 p-1 rounded-2xl border border-slate-800 shadow-inner">
+      <div className="grid grid-cols-4 gap-1.5 bg-slate-900/60 p-1 rounded-2xl border border-slate-800/80 shadow-inner">
         {meals.map((meal) => {
           const isActive = activeMealType === meal.id;
           const cal = mealCalories[meal.id];
@@ -54,18 +53,27 @@ export const MealSelector: React.FC<MealSelectorProps> = ({
           return (
             <button
               key={meal.id}
+              type="button"
               onClick={() => onChangeMealType(meal.id)}
-              className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all ${
+              className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all duration-150 active:scale-95 ${
                 isActive
-                  ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/30 scale-[1.02]'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-500/25 border border-sky-400/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
               <div className="flex items-center gap-1 text-xs font-bold leading-none">
                 <span>{meal.icon}</span>
                 <span>{meal.label}</span>
               </div>
-              <span className={`text-[10px] font-mono mt-1 ${isActive ? 'text-sky-100 font-bold' : cal > 0 ? 'text-orange-400 font-semibold' : 'text-slate-600'}`}>
+              <span
+                className={`text-[10px] font-mono mt-1 ${
+                  isActive
+                    ? 'text-sky-100 font-bold'
+                    : cal > 0
+                    ? 'text-orange-400 font-bold'
+                    : 'text-slate-600'
+                }`}
+              >
                 {cal > 0 ? `${cal}kcal` : '-'}
               </span>
             </button>

@@ -15,7 +15,7 @@ import {
   getTodayDateString,
 } from './utils/calculations';
 import { Header } from './components/Header';
-import { DailySummary } from './components/DailySummary';
+import { DashboardHeader } from './components/DashboardHeader';
 import { MealSelector, meals } from './components/MealSelector';
 import { PresetGrid } from './components/PresetGrid';
 import { IntakeLogsList } from './components/IntakeLogsList';
@@ -242,8 +242,8 @@ export function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-sky-500 selection:text-white pb-safe">
       <Toast toast={toast} onClose={() => setToast(null)} />
 
-      <main className="w-full max-w-md mx-auto px-4 pt-1 pb-16 space-y-3.5">
-        {/* ヘッダー（日付切替・カレンダー起動） */}
+      {/* トップアプリバー（ロゴ、日付切替、各種モーダル起動） */}
+      <div className="w-full max-w-md mx-auto px-4 pt-1">
         <Header
           currentDate={selectedDate}
           onOpenCalendar={() => setIsCalendarOpen(true)}
@@ -254,13 +254,16 @@ export function App() {
           onOpenQuickAdd={() => setIsQuickAddOpen(true)}
           onOpenBackupModal={() => setIsBackupOpen(true)}
         />
+      </div>
 
-        {/* 選択中の日のサマリー（合計カロリー & PFCバー） */}
-        <DailySummary
-          appState={displayState}
-          onOpenTargetModal={() => setIsTargetModalOpen(true)}
-        />
+      {/* 固定グラスモーフィズム ダッシュボードヘッダー（カロリー＆PFC集計カード） */}
+      <DashboardHeader
+        appState={displayState}
+        onOpenTargetModal={() => setIsTargetModalOpen(true)}
+      />
 
+      {/* メインスクロールエリア */}
+      <main className="w-full max-w-md mx-auto px-4 pt-3 pb-16 space-y-3.5 flex-1">
         {/* 食事区分セレクター（朝食 / 昼食 / 夕食 / 間食） */}
         <MealSelector
           activeMealType={activeMealType}
