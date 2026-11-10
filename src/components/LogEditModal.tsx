@@ -25,26 +25,27 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
   onSave,
   onDelete,
 }) => {
-  const [amount, setAmount] = useState<number>(0);
+  const [amount, setAmount] = useState<string>('0');
   const [mealType, setMealType] = useState<MealType>('lunch');
 
   useEffect(() => {
     if (log) {
-      setAmount(log.currentAmount);
+      setAmount(String(log.currentAmount));
       setMealType(log.mealType || getDefaultMealType(new Date(log.timestamp)));
     }
   }, [log, isOpen]);
 
   if (!isOpen || !log) return null;
 
-  const ratio = log.baseAmount > 0 ? amount / log.baseAmount : 1;
+  const numAmount = parseFloat(amount) || 0;
+  const ratio = log.baseAmount > 0 ? numAmount / log.baseAmount : 1;
   const previewP = round1(log.baseP * ratio);
   const previewF = round1(log.baseF * ratio);
   const previewC = round1(log.baseC * ratio);
   const previewCal = calcCalories(previewP, previewF, previewC);
 
   const baseName = log.name.replace(/\s+\d+(\.\d+)?[^\s]*$/, '');
-  const formattedAmount = Number.isInteger(amount) ? amount : round1(amount);
+  const formattedAmount = Number.isInteger(numAmount) ? numAmount : round1(numAmount);
   const previewDisplayName = `${baseName} ${formattedAmount}${log.unit}`;
 
   const multipliers = [
@@ -56,11 +57,11 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
 
   const handleMultiplierClick = (m: number) => {
     const newAmt = round1(log.baseAmount * m);
-    setAmount(newAmt);
+    setAmount(String(newAmt));
   };
 
   const handleSave = () => {
-    onSave(log.id, Math.max(0, amount), mealType);
+    onSave(log.id, Math.max(0, parseFloat(amount) || 0), mealType);
     onClose();
   };
 
@@ -149,7 +150,7 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
           </label>
           <div className="grid grid-cols-4 gap-2">
             {multipliers.map((m) => {
-              const isSelected = round1(amount) === round1(log.baseAmount * m.value);
+              const isSelected = round1(numAmount) === round1(log.baseAmount * m.value);
               return (
                 <button
                   key={m.label}
@@ -183,8 +184,10 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
               type="number"
               step="any"
               min="0"
+              placeholder="0"
               value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setAmount(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xl font-black text-white focus:outline-none focus:border-sky-500"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">

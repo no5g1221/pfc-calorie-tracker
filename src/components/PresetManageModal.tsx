@@ -26,10 +26,10 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CategoryType>('staple');
   const [unit, setUnit] = useState('g');
-  const [baseAmount, setBaseAmount] = useState<number>(100);
-  const [baseP, setBaseP] = useState<number>(0);
-  const [baseF, setBaseF] = useState<number>(0);
-  const [baseC, setBaseC] = useState<number>(0);
+  const [baseAmount, setBaseAmount] = useState<string>('100');
+  const [baseP, setBaseP] = useState<string>('0');
+  const [baseF, setBaseF] = useState<string>('0');
+  const [baseC, setBaseC] = useState<string>('0');
 
   if (!isOpen) return null;
 
@@ -38,10 +38,10 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
     setName('');
     setCategory('staple');
     setUnit('g');
-    setBaseAmount(100);
-    setBaseP(0);
-    setBaseF(0);
-    setBaseC(0);
+    setBaseAmount('100');
+    setBaseP('0');
+    setBaseF('0');
+    setBaseC('0');
     setMode('form');
   };
 
@@ -50,12 +50,17 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
     setName(preset.name);
     setCategory(preset.category);
     setUnit(preset.unit);
-    setBaseAmount(preset.baseAmount);
-    setBaseP(preset.baseP);
-    setBaseF(preset.baseF);
-    setBaseC(preset.baseC);
+    setBaseAmount(String(preset.baseAmount));
+    setBaseP(String(preset.baseP));
+    setBaseF(String(preset.baseF));
+    setBaseC(String(preset.baseC));
     setMode('form');
   };
+
+  const numBaseP = parseFloat(baseP) || 0;
+  const numBaseF = parseFloat(baseF) || 0;
+  const numBaseC = parseFloat(baseC) || 0;
+  const previewCal = calcCalories(numBaseP, numBaseF, numBaseC);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,17 +71,16 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
       name: name.trim(),
       category,
       unit: unit.trim() || 'g',
-      baseAmount: Math.max(0.1, Number(baseAmount) || 100),
-      baseP: round1(Number(baseP) || 0),
-      baseF: round1(Number(baseF) || 0),
-      baseC: round1(Number(baseC) || 0),
+      baseAmount: Math.max(0.1, parseFloat(baseAmount) || 100),
+      baseP: round1(numBaseP),
+      baseF: round1(numBaseF),
+      baseC: round1(numBaseC),
     };
 
     onSavePreset(item);
     setMode('list');
   };
 
-  const previewCal = calcCalories(baseP, baseF, baseC);
   const commonUnits = ['g', '個', '尾', 'パック', '切れ', '缶', '枚', '杯'];
 
   return (
@@ -238,8 +242,10 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                   step="any"
                   min="0.1"
                   required
+                  placeholder="100"
                   value={baseAmount}
-                  onChange={(e) => setBaseAmount(parseFloat(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setBaseAmount(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -292,8 +298,10 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                     type="number"
                     step="0.1"
                     min="0"
+                    placeholder="0"
                     value={baseP}
-                    onChange={(e) => setBaseP(parseFloat(e.target.value) || 0)}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setBaseP(e.target.value)}
                     className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                   />
                 </div>
@@ -303,8 +311,10 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                     type="number"
                     step="0.1"
                     min="0"
+                    placeholder="0"
                     value={baseF}
-                    onChange={(e) => setBaseF(parseFloat(e.target.value) || 0)}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setBaseF(e.target.value)}
                     className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
@@ -314,8 +324,10 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                     type="number"
                     step="0.1"
                     min="0"
+                    placeholder="0"
                     value={baseC}
-                    onChange={(e) => setBaseC(parseFloat(e.target.value) || 0)}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setBaseC(e.target.value)}
                     className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>

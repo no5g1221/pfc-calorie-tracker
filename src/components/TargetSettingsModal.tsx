@@ -16,14 +16,14 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [calories, setCalories] = useState<number>(2000);
+  const [calories, setCalories] = useState<string>('2000');
   const [pRatio, setPRatio] = useState<number>(30);
   const [fRatio, setFRatio] = useState<number>(20);
   const [cRatio, setCRatio] = useState<number>(50);
 
   useEffect(() => {
     if (target) {
-      setCalories(target.calories);
+      setCalories(String(target.calories));
       setPRatio(target.pRatio);
       setFRatio(target.fRatio);
       setCRatio(target.cRatio);
@@ -32,9 +32,10 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
 
   if (!isOpen) return null;
 
+  const numCalories = parseInt(calories, 10) || 0;
   const totalRatio = pRatio + fRatio + cRatio;
   const isRatioValid = totalRatio === 100;
-  const { targetP, targetF, targetC } = calcTargetMacros(calories, pRatio, fRatio, cRatio);
+  const { targetP, targetF, targetC } = calcTargetMacros(numCalories, pRatio, fRatio, cRatio);
 
   const presets = [
     { label: '標準バランス', p: 30, f: 20, c: 50 },
@@ -52,7 +53,7 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
   const handleSave = () => {
     if (!isRatioValid) return;
     onSave({
-      calories: Math.max(500, calories),
+      calories: Math.max(500, numCalories),
       pRatio,
       fRatio,
       cRatio,
@@ -94,8 +95,10 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
               step="50"
               min="500"
               max="10000"
+              placeholder="2000"
               value={calories}
-              onChange={(e) => setCalories(parseInt(e.target.value) || 0)}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setCalories(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xl font-black text-white focus:outline-none focus:border-sky-500"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">

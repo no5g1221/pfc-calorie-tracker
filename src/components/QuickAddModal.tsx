@@ -24,12 +24,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   onAdd,
 }) => {
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState<number>(1);
+  const [amount, setAmount] = useState<string>('1');
   const [unit, setUnit] = useState('人前');
   const [mealType, setMealType] = useState<MealType>(defaultMealType);
-  const [p, setP] = useState<number>(0);
-  const [f, setF] = useState<number>(0);
-  const [c, setC] = useState<number>(0);
+  const [p, setP] = useState<string>('0');
+  const [f, setF] = useState<string>('0');
+  const [c, setC] = useState<string>('0');
 
   // モーダルが開かれた時にdefaultMealTypeをセット
   React.useEffect(() => {
@@ -40,16 +40,19 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
   if (!isOpen) return null;
 
-  const cal = calcCalories(p, f, c);
+  const numP = parseFloat(p) || 0;
+  const numF = parseFloat(f) || 0;
+  const numC = parseFloat(c) || 0;
+  const cal = calcCalories(numP, numF, numC);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const currentAmount = Number(amount) || 1;
-    const currentP = round1(Number(p) || 0);
-    const currentF = round1(Number(f) || 0);
-    const currentC = round1(Number(c) || 0);
+    const currentAmount = parseFloat(amount) || 1;
+    const currentP = round1(numP);
+    const currentF = round1(numF);
+    const currentC = round1(numC);
 
     const newLog: IntakeLogItem = {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -69,11 +72,11 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
     onAdd(newLog);
     setName('');
-    setAmount(1);
+    setAmount('1');
     setUnit('人前');
-    setP(0);
-    setF(0);
-    setC(0);
+    setP('0');
+    setF('0');
+    setC('0');
     onClose();
   };
 
@@ -141,8 +144,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 step="any"
                 min="0.1"
                 required
+                placeholder="1"
                 value={amount}
-                onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setAmount(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-purple-500"
               />
             </div>
@@ -172,8 +177,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   type="number"
                   step="0.1"
                   min="0"
+                  placeholder="0"
                   value={p}
-                  onChange={(e) => setP(parseFloat(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setP(e.target.value)}
                   className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -183,8 +190,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   type="number"
                   step="0.1"
                   min="0"
+                  placeholder="0"
                   value={f}
-                  onChange={(e) => setF(parseFloat(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setF(e.target.value)}
                   className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -194,8 +203,10 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   type="number"
                   step="0.1"
                   min="0"
+                  placeholder="0"
                   value={c}
-                  onChange={(e) => setC(parseFloat(e.target.value) || 0)}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => setC(e.target.value)}
                   className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
