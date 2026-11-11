@@ -73,8 +73,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <h1 className="text-sm font-black tracking-tight text-white flex items-center gap-1.5 leading-none m-0">
               パプリカPFC
-              <span className="text-[10px] font-bold text-sky-400 bg-sky-950/80 border border-sky-800/80 px-1.5 py-0.5 rounded-md">
-                自炊派
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-1.5 py-0.5 rounded-md">
+                自炊派 ✨
               </span>
             </h1>
           </div>
