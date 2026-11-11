@@ -1,5 +1,5 @@
-import React from 'react';
-import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, RefreshCw } from 'lucide-react';
 import { getTodayDateString } from '../utils/calculations';
 
 interface HeaderProps {
@@ -37,6 +37,29 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleReloadApp = async () => {
+    setIsRefreshing(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const r of registrations) {
+          await r.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          await caches.delete(k);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+  };
+
   return (
     <header className="space-y-2 pb-1">
       {/* 1行目: アプリロゴ & 各種メニューボタン */}
@@ -58,6 +81,18 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* アプリ更新ボタン */}
+          <button
+            type="button"
+            onClick={handleReloadApp}
+            disabled={isRefreshing}
+            className="p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-sky-400 transition-all duration-150 active:scale-95 shadow-sm"
+            title="アプリを最新版に更新"
+            aria-label="アプリ更新"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`} />
+          </button>
+
           {/* 自由入力ボタン */}
           <button
             type="button"
