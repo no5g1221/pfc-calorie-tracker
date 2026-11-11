@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { AppState } from '../types';
 import { DEFAULT_PRESETS } from '../utils/storage';
-import { X, Copy, Check, RotateCcw, Upload, FileText, Smartphone } from 'lucide-react';
+import { X, Copy, Check, RotateCcw, Upload, FileText, Smartphone, RefreshCw } from 'lucide-react';
 
 interface DataBackupModalProps {
   isOpen: boolean;
@@ -85,6 +85,30 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     }
   };
 
+  // アプリのキャッシュクリア & 強制再読み込み
+  const [isUpdating, setIsUpdating] = useState(false);
+  const handleForceUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const r of registrations) {
+          await r.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          await caches.delete(k);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    // ハードリロード
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto no-scrollbar animate-in slide-in-from-bottom duration-200">
@@ -163,7 +187,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
         </div>
 
         {/* 3. 初期パーツ復元 */}
-        <div className="pt-2 border-t border-slate-800">
+        <div className="pt-2 border-t border-slate-800 space-y-2">
           <button
             type="button"
             onClick={handleResetPresets}
@@ -171,6 +195,17 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
             <span>定番パーツのみ初期状態（8品）に戻す</span>
+          </button>
+
+          {/* アプリ更新ボタン */}
+          <button
+            type="button"
+            onClick={handleForceUpdate}
+            disabled={isUpdating}
+            className="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-xs font-bold text-sky-400 hover:text-sky-300 transition-all flex items-center justify-center gap-2 active:scale-98 shadow-sm"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+            <span>{isUpdating ? '最新版を読み込み中...' : 'アプリを最新バージョンに更新（キャッシュ削除）'}</span>
           </button>
         </div>
 
