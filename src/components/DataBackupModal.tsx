@@ -20,6 +20,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   if (!isOpen) return null;
 
@@ -86,7 +87,6 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   };
 
   // アプリのキャッシュクリア & 強制再読み込み
-  const [isUpdating, setIsUpdating] = useState(false);
   const handleForceUpdate = async () => {
     setIsUpdating(true);
     try {
