@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CategoryType, PresetItem } from '../types';
-import { calcCalories, round1 } from '../utils/calculations';
+import { calcCalories, round1, cleanNumberInput } from '../utils/calculations';
 import { X, Check, Trash2, Plus, Edit2, ArrowLeft } from 'lucide-react';
 
 interface PresetManageModalProps {
@@ -27,9 +27,9 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
   const [category, setCategory] = useState<CategoryType>('staple');
   const [unit, setUnit] = useState('g');
   const [baseAmount, setBaseAmount] = useState<string>('100');
-  const [baseP, setBaseP] = useState<string>('0');
-  const [baseF, setBaseF] = useState<string>('0');
-  const [baseC, setBaseC] = useState<string>('0');
+  const [baseP, setBaseP] = useState<string>('');
+  const [baseF, setBaseF] = useState<string>('');
+  const [baseC, setBaseC] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -39,9 +39,9 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
     setCategory('staple');
     setUnit('g');
     setBaseAmount('100');
-    setBaseP('0');
-    setBaseF('0');
-    setBaseC('0');
+    setBaseP('');
+    setBaseF('');
+    setBaseC('');
     setMode('form');
   };
 
@@ -51,9 +51,9 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
     setCategory(preset.category);
     setUnit(preset.unit);
     setBaseAmount(String(preset.baseAmount));
-    setBaseP(String(preset.baseP));
-    setBaseF(String(preset.baseF));
-    setBaseC(String(preset.baseC));
+    setBaseP(preset.baseP === 0 ? '' : String(preset.baseP));
+    setBaseF(preset.baseF === 0 ? '' : String(preset.baseF));
+    setBaseC(preset.baseC === 0 ? '' : String(preset.baseC));
     setMode('form');
   };
 
@@ -244,8 +244,12 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                   required
                   placeholder="100"
                   value={baseAmount}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setBaseAmount(e.target.value)}
+                  onFocus={(e) => {
+                    const el = e.target;
+                    setTimeout(() => el.select(), 50);
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  onChange={(e) => setBaseAmount(cleanNumberInput(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -284,7 +288,7 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-300">
-                  基準量（{baseAmount}{unit}）のPFC
+                  基準量（{baseAmount || 0}{unit}）のPFC
                 </span>
                 <span className="text-xs font-bold text-orange-400">
                   {previewCal} kcal
@@ -300,8 +304,12 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                     min="0"
                     placeholder="0"
                     value={baseP}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setBaseP(e.target.value)}
+                    onFocus={(e) => {
+                      const el = e.target;
+                      setTimeout(() => el.select(), 50);
+                    }}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    onChange={(e) => setBaseP(cleanNumberInput(e.target.value))}
                     className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                   />
                 </div>
@@ -313,8 +321,12 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                     min="0"
                     placeholder="0"
                     value={baseF}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setBaseF(e.target.value)}
+                    onFocus={(e) => {
+                      const el = e.target;
+                      setTimeout(() => el.select(), 50);
+                    }}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    onChange={(e) => setBaseF(cleanNumberInput(e.target.value))}
                     className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
@@ -326,8 +338,12 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
                     min="0"
                     placeholder="0"
                     value={baseC}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setBaseC(e.target.value)}
+                    onFocus={(e) => {
+                      const el = e.target;
+                      setTimeout(() => el.select(), 50);
+                    }}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    onChange={(e) => setBaseC(cleanNumberInput(e.target.value))}
                     className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>

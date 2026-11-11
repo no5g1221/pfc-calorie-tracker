@@ -9,6 +9,16 @@ export const round1 = (num: number): number => {
 };
 
 /**
+ * 数値入力フィールド用のサニタイズ関数
+ * 1. "010" や "01.5" のように先頭に不要な0がついた場合、自動で先頭の0を除去して "10", "1.5" にする
+ * 2. "0" 単体や "0.5" などの正当な0始まりはそのまま維持する
+ */
+export const cleanNumberInput = (val: string): string => {
+  if (!val) return '';
+  return val.replace(/^0+([1-9])/, '$1');
+};
+
+/**
  * カロリー計算式：round1(P) * 4 + round1(F) * 9 + round1(C) * 4（整数表示は Math.round()）
  * 手入力は行わず、常にPFCグラム数から自動算出する。
  */

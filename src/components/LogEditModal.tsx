@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { IntakeLogItem, MealType } from '../types';
-import { calcCalories, round1, getDefaultMealType } from '../utils/calculations';
+import { calcCalories, round1, getDefaultMealType, cleanNumberInput } from '../utils/calculations';
 import { X, Check, Trash2, Scale } from 'lucide-react';
 
 interface LogEditModalProps {
@@ -25,12 +25,12 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
   onSave,
   onDelete,
 }) => {
-  const [amount, setAmount] = useState<string>('0');
+  const [amount, setAmount] = useState<string>('');
   const [mealType, setMealType] = useState<MealType>('lunch');
 
   useEffect(() => {
     if (log) {
-      setAmount(String(log.currentAmount));
+      setAmount(log.currentAmount === 0 ? '' : String(log.currentAmount));
       setMealType(log.mealType || getDefaultMealType(new Date(log.timestamp)));
     }
   }, [log, isOpen]);
@@ -186,8 +186,12 @@ export const LogEditModal: React.FC<LogEditModalProps> = ({
               min="0"
               placeholder="0"
               value={amount}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => setAmount(e.target.value)}
+              onFocus={(e) => {
+                const el = e.target;
+                setTimeout(() => el.select(), 50);
+              }}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              onChange={(e) => setAmount(cleanNumberInput(e.target.value))}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xl font-black text-white focus:outline-none focus:border-sky-500"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">

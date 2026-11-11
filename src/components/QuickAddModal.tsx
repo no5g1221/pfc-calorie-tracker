@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { IntakeLogItem, MealType } from '../types';
-import { calcCalories, round1 } from '../utils/calculations';
+import { calcCalories, round1, cleanNumberInput } from '../utils/calculations';
 import { X, Check, UtensilsCrossed } from 'lucide-react';
 
 interface QuickAddModalProps {
@@ -27,9 +27,9 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   const [amount, setAmount] = useState<string>('1');
   const [unit, setUnit] = useState('人前');
   const [mealType, setMealType] = useState<MealType>(defaultMealType);
-  const [p, setP] = useState<string>('0');
-  const [f, setF] = useState<string>('0');
-  const [c, setC] = useState<string>('0');
+  const [p, setP] = useState<string>('');
+  const [f, setF] = useState<string>('');
+  const [c, setC] = useState<string>('');
 
   // モーダルが開かれた時にdefaultMealTypeをセット
   React.useEffect(() => {
@@ -74,9 +74,9 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
     setName('');
     setAmount('1');
     setUnit('人前');
-    setP('0');
-    setF('0');
-    setC('0');
+    setP('');
+    setF('');
+    setC('');
     onClose();
   };
 
@@ -146,8 +146,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 required
                 placeholder="1"
                 value={amount}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setAmount(e.target.value)}
+                onFocus={(e) => {
+                  const el = e.target;
+                  setTimeout(() => el.select(), 50);
+                }}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                onChange={(e) => setAmount(cleanNumberInput(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-purple-500"
               />
             </div>
@@ -179,8 +183,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   min="0"
                   placeholder="0"
                   value={p}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setP(e.target.value)}
+                  onFocus={(e) => {
+                    const el = e.target;
+                    setTimeout(() => el.select(), 50);
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  onChange={(e) => setP(cleanNumberInput(e.target.value))}
                   className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -192,8 +200,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   min="0"
                   placeholder="0"
                   value={f}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setF(e.target.value)}
+                  onFocus={(e) => {
+                    const el = e.target;
+                    setTimeout(() => el.select(), 50);
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  onChange={(e) => setF(cleanNumberInput(e.target.value))}
                   className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -205,8 +217,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                   min="0"
                   placeholder="0"
                   value={c}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setC(e.target.value)}
+                  onFocus={(e) => {
+                    const el = e.target;
+                    setTimeout(() => el.select(), 50);
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  onChange={(e) => setC(cleanNumberInput(e.target.value))}
                   className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>

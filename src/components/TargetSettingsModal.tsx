@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { AppState } from '../types';
-import { calcTargetMacros } from '../utils/calculations';
+import { calcTargetMacros, cleanNumberInput } from '../utils/calculations';
 import { X, Check, Target, AlertTriangle } from 'lucide-react';
 
 interface TargetSettingsModalProps {
@@ -97,8 +97,12 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
               max="10000"
               placeholder="2000"
               value={calories}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => setCalories(e.target.value)}
+              onFocus={(e) => {
+                const el = e.target;
+                setTimeout(() => el.select(), 50);
+              }}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              onChange={(e) => setCalories(cleanNumberInput(e.target.value))}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-xl font-black text-white focus:outline-none focus:border-sky-500"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
