@@ -20,6 +20,18 @@ interface GeminiApiResponse {
       parts?: Array<{ text?: string }>;
     };
   }>;
+  error?: {
+    code?: number;
+    status?: string;
+    message?: string;
+  };
+}
+
+interface GeminiModelsResponse {
+  models?: Array<{
+    name?: string;
+    supportedGenerationMethods?: string[];
+  }>;
 }
 
 interface NutritionEstimateResult {
@@ -46,6 +58,16 @@ const clampMacro = (num: unknown): number => {
 
 const VALID_CATEGORIES = new Set<CategoryType>(['staple', 'main', 'sub']);
 const VALID_CONFIDENCE = new Set<ConfidenceLevel>(['high', 'medium', 'low']);
+const EXCLUDED_MODEL_KEYWORDS = [
+  'image',
+  'audio',
+  'tts',
+  'live',
+  'embedding',
+  'vision',
+  'robotics',
+  'computer-use',
+];
 
 const SYSTEM_INSTRUCTION = [
   'あなたは日本の経験豊富な管理栄養士です。ユーザーが入力した食品名・料理名・外食チェーンメニュー・コンビニ商品の栄養成分（PFCと基準量）を推定してください。',
@@ -88,6 +110,168 @@ const RESPONSE_SCHEMA = {
   ],
 };
 
+async function discoverFlashModel(apiKey: string, alreadyTried: Set<string>): Promise<string | null> {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+      method: 'GET',
+      headers: {
+        'x-goog-api-key': apiKey,
+      },
+    });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as GeminiModelsResponse;
+    const candidates = (data.models || [])
+      .filter((m) => {
+        const name = (m.name || '').toLowerCase();
+        const methods = m.supportedGenerationMethods || [];
+        return (
+          methods.includes('generateContent') &&
+          name.includes('flash') &&
+          !EXCLUDED_MODEL_KEYWORDS.some((kw) => name.includes(kw))
+        );
+      })
+      .map((m) => (m.name || '').replace(/^models\//, ''))
+      .filter((id) => id.length > 0 && !alreadyTried.has(id));
+
+    if (candidates.length === 0) return null;
+    // 最新・安定版を優先して選択
+    candidates.sort((a, b) => b.localeCompare(a));
+    return candidates[0];
+  } catch (err) {
+    console.error('[estimate-nutrition] Failed to list Gemini models:', err);
+    return null;
+  }
+}
+
+type CallResult =
+  | { ok: true; data: GeminiApiResponse }
+  | { ok: false; status: number; errorStatus: string; errorMessage: string };
+
+async function callGeminiModel(model: string, apiKey: string, rawQuery: string): Promise<CallResult> {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const geminiRes = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: SYSTEM_INSTRUCTION }],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: `食品・メニュー: ${rawQuery}` }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA,
+      },
+    }),
+  });
+
+  if (geminiRes.ok) {
+    const data = (await geminiRes.json()) as GeminiApiResponse;
+    return { ok: true, data };
+  }
+
+  let errorStatus = '';
+  let errorMessage = '';
+  const rawErr = await geminiRes.text().catch(() => '');
+  try {
+    const parsedErr = JSON.parse(rawErr) as GeminiApiResponse;
+    errorStatus = parsedErr.error?.status || '';
+    errorMessage = (parsedErr.error?.message || '').slice(0, 160);
+  } catch {
+    errorMessage = rawErr.slice(0, 160);
+  }
+
+  // 安全のためAPIキーが含まれる可能性を排除
+  if (apiKey && errorMessage.includes(apiKey)) {
+    errorMessage = errorMessage.split(apiKey).join('[REDACTED]');
+  }
+
+  console.error(
+    `[estimate-nutrition] Gemini API error (${geminiRes.status}) on model ${model}:`,
+    errorStatus,
+    errorMessage
+  );
+
+  return {
+    ok: false,
+    status: geminiRes.status,
+    errorStatus,
+    errorMessage,
+  };
+}
+
+function buildSuccessResponse(responseData: GeminiApiResponse, usedModel: string, rawQuery: string): Response {
+  const text = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    console.error('[estimate-nutrition] Empty Gemini response from model:', usedModel);
+    return Response.json(
+      {
+        error: 'AIから栄養情報を取得できませんでした。表現を変えて再試行してください。',
+        code: 'EMPTY_RESPONSE',
+      },
+      { status: 502 }
+    );
+  }
+
+  let parsed: GeminiParsedNutrition;
+  try {
+    parsed = JSON.parse(text) as GeminiParsedNutrition;
+  } catch (parseErr) {
+    console.error('[estimate-nutrition] Failed to parse Gemini JSON:', parseErr);
+    return Response.json(
+      { error: 'AIの応答解析に失敗しました。もう一度お試しください。', code: 'PARSE_ERROR' },
+      { status: 502 }
+    );
+  }
+
+  if (parsed.isFood === false) {
+    return Response.json(
+      {
+        error: '食品・メニューとして認識できませんでした。もう少し具体的に入力してみてください。',
+        code: 'NOT_FOOD',
+      },
+      { status: 400 }
+    );
+  }
+
+  const safeCategory: CategoryType = VALID_CATEGORIES.has(parsed.category as CategoryType)
+    ? (parsed.category as CategoryType)
+    : 'main';
+  const safeConfidence: ConfidenceLevel = VALID_CONFIDENCE.has(
+    parsed.confidence as ConfidenceLevel
+  )
+    ? (parsed.confidence as ConfidenceLevel)
+    : 'medium';
+
+  const rawAmount = typeof parsed.baseAmount === 'number' ? parsed.baseAmount : 1;
+  const safeAmount = Number.isFinite(rawAmount) && rawAmount > 0 ? round1(rawAmount) : 1;
+
+  const result: NutritionEstimateResult = {
+    name: (typeof parsed.name === 'string' && parsed.name.trim()) || rawQuery,
+    category: safeCategory,
+    baseAmount: safeAmount,
+    unit: (typeof parsed.unit === 'string' && parsed.unit.trim()) || '食',
+    baseP: clampMacro(parsed.baseP),
+    baseF: clampMacro(parsed.baseF),
+    baseC: clampMacro(parsed.baseC),
+    confidence: safeConfidence,
+    note:
+      (typeof parsed.note === 'string' && parsed.note.trim().slice(0, 60)) ||
+      '一般的な栄養成分の目安',
+  };
+
+  return Response.json({ result, model: usedModel }, { status: 200 });
+}
+
 export async function POST(request: Request): Promise<Response> {
   try {
     let body: { query?: unknown };
@@ -124,117 +308,89 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const primaryModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
-    const modelsToTry = Array.from(new Set([primaryModel, 'gemini-2.5-flash-lite']));
+    const envModel = process.env.GEMINI_MODEL?.trim();
+    const modelsToTry = Array.from(
+      new Set(
+        [
+          envModel,
+          'gemini-3-flash-preview',
+          'gemini-3-flash',
+          'gemini-2.5-flash',
+          'gemini-2.5-flash-lite',
+        ].filter((m): m is string => Boolean(m))
+      )
+    );
 
+    const triedModels = new Set<string>();
     let lastStatus = 500;
+    let lastErrorStatus = '';
+    let lastErrorMessage = '';
+    let allNotFound = true;
 
-    for (let i = 0; i < modelsToTry.length; i++) {
-      const model = modelsToTry[i];
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    for (const model of modelsToTry) {
+      triedModels.add(model);
+      const attempt = await callGeminiModel(model, apiKey, rawQuery);
+      if (attempt.ok) {
+        return buildSuccessResponse(attempt.data, model, rawQuery);
+      }
 
-      const geminiRes = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+      lastStatus = attempt.status;
+      lastErrorStatus = attempt.errorStatus;
+      lastErrorMessage = attempt.errorMessage;
+      if (attempt.status !== 404) {
+        allNotFound = false;
+      }
+
+      const isInvalidKey =
+        attempt.status === 401 ||
+        attempt.status === 403 ||
+        (attempt.status === 400 &&
+          (attempt.errorStatus.includes('API_KEY_INVALID') ||
+            attempt.errorMessage.includes('API key not valid') ||
+            attempt.errorMessage.includes('API_KEY_INVALID')));
+
+      if (isInvalidKey) {
+        break;
+      }
+
+      const canFallback = attempt.status === 429 || attempt.status === 404 || attempt.status === 503;
+      if (!canFallback) {
+        break;
+      }
+    }
+
+    // すべての固定モデルが404だった場合は利用可能なFlashモデルを動的取得して1回再試行
+    if (allNotFound || lastStatus === 404) {
+      const discovered = await discoverFlashModel(apiKey, triedModels);
+      if (discovered) {
+        const attempt = await callGeminiModel(discovered, apiKey, rawQuery);
+        if (attempt.ok) {
+          return buildSuccessResponse(attempt.data, discovered, rawQuery);
+        }
+        lastStatus = attempt.status;
+        lastErrorStatus = attempt.errorStatus;
+        lastErrorMessage = attempt.errorMessage;
+      }
+    }
+
+    const isKeyInvalidError =
+      lastStatus === 401 ||
+      lastStatus === 403 ||
+      (lastStatus === 400 &&
+        (lastErrorStatus.includes('API_KEY_INVALID') ||
+          lastErrorMessage.includes('API key not valid') ||
+          lastErrorMessage.includes('API_KEY_INVALID')));
+
+    if (isKeyInvalidError) {
+      return Response.json(
+        {
+          error: 'GEMINI_API_KEY が無効か権限がありません。Vercelの環境変数設定を確認してください。',
+          code: 'INVALID_API_KEY',
+          upstreamStatus: lastStatus,
+          detail: lastErrorStatus || lastErrorMessage,
         },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: SYSTEM_INSTRUCTION }],
-          },
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: `食品・メニュー: ${rawQuery}` }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA,
-          },
-        }),
-      });
-
-      if (geminiRes.ok) {
-        const responseData = (await geminiRes.json()) as GeminiApiResponse;
-        const usedModel = model;
-
-        const text = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) {
-          console.error('[estimate-nutrition] Empty Gemini response from model:', usedModel);
-          return Response.json(
-            { error: 'AIから栄養情報を取得できませんでした。表現を変えて再試行してください。', code: 'EMPTY_RESPONSE' },
-            { status: 502 }
-          );
-        }
-
-        let parsed: GeminiParsedNutrition;
-        try {
-          parsed = JSON.parse(text) as GeminiParsedNutrition;
-        } catch (parseErr) {
-          console.error('[estimate-nutrition] Failed to parse Gemini JSON:', parseErr);
-          return Response.json(
-            { error: 'AIの応答解析に失敗しました。もう一度お試しください。', code: 'PARSE_ERROR' },
-            { status: 502 }
-          );
-        }
-
-        if (parsed.isFood === false) {
-          return Response.json(
-            {
-              error: '食品・メニューとして認識できませんでした。もう少し具体的に入力してみてください。',
-              code: 'NOT_FOOD',
-            },
-            { status: 400 }
-          );
-        }
-
-        const safeCategory: CategoryType = VALID_CATEGORIES.has(parsed.category as CategoryType)
-          ? (parsed.category as CategoryType)
-          : 'main';
-        const safeConfidence: ConfidenceLevel = VALID_CONFIDENCE.has(
-          parsed.confidence as ConfidenceLevel
-        )
-          ? (parsed.confidence as ConfidenceLevel)
-          : 'medium';
-
-        const rawAmount = typeof parsed.baseAmount === 'number' ? parsed.baseAmount : 1;
-        const safeAmount = Number.isFinite(rawAmount) && rawAmount > 0 ? round1(rawAmount) : 1;
-
-        const result: NutritionEstimateResult = {
-          name: (typeof parsed.name === 'string' && parsed.name.trim()) || rawQuery,
-          category: safeCategory,
-          baseAmount: safeAmount,
-          unit: (typeof parsed.unit === 'string' && parsed.unit.trim()) || '食',
-          baseP: clampMacro(parsed.baseP),
-          baseF: clampMacro(parsed.baseF),
-          baseC: clampMacro(parsed.baseC),
-          confidence: safeConfidence,
-          note:
-            (typeof parsed.note === 'string' && parsed.note.trim().slice(0, 60)) ||
-            '一般的な栄養成分の目安',
-        };
-
-        return Response.json({ result, model: usedModel }, { status: 200 });
-      }
-
-      lastStatus = geminiRes.status;
-      const errText = await geminiRes.text().catch(() => '');
-      console.error(
-        `[estimate-nutrition] Gemini API error (${geminiRes.status}) on model ${model}:`,
-        errText.slice(0, 300)
+        { status: 503 }
       );
-
-      const canFallback =
-        (geminiRes.status === 429 || geminiRes.status === 404 || geminiRes.status === 503) &&
-        i < modelsToTry.length - 1;
-
-      if (canFallback) {
-        continue;
-      }
-      break;
     }
 
     if (lastStatus === 429) {
@@ -242,18 +398,9 @@ export async function POST(request: Request): Promise<Response> {
         {
           error: 'AI検索の無料枠上限に達しました。少し時間をおいて再度お試しください。',
           code: 'RATE_LIMITED',
+          upstreamStatus: lastStatus,
         },
         { status: 429 }
-      );
-    }
-
-    if (lastStatus === 401 || lastStatus === 403) {
-      return Response.json(
-        {
-          error: 'GEMINI_API_KEY が無効か権限がありません。設定を確認してください。',
-          code: 'INVALID_API_KEY',
-        },
-        { status: 503 }
       );
     }
 
@@ -261,6 +408,8 @@ export async function POST(request: Request): Promise<Response> {
       {
         error: '現在AI検索に接続できません。しばらくしてから再度お試しください。',
         code: 'UPSTREAM_ERROR',
+        upstreamStatus: lastStatus,
+        detail: lastErrorStatus || lastErrorMessage,
       },
       { status: 502 }
     );
