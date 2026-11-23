@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import type { AppState, IntakeLogItem, MealType, RoughPresetItem } from '../types';
+import type {
+  AppState,
+  CategoryType,
+  IntakeLogItem,
+  MealType,
+  NutritionEstimateResult,
+  PresetItem,
+  RoughPresetItem,
+} from '../types';
 import {
   calcCalories,
   calcMacrosFromCalories,
@@ -7,11 +15,13 @@ import {
   createRoughLogItem,
   round1,
 } from '../utils/calculations';
+import { AiNutritionSearch } from './AiNutritionSearch';
 import {
   X,
   Check,
   UtensilsCrossed,
   Zap,
+  Sparkles,
   Flame,
   Sliders,
   Edit2,
@@ -30,13 +40,14 @@ interface QuickAddModalProps {
   isRestDay: boolean;
   onClose: () => void;
   onAdd: (log: IntakeLogItem) => void;
+  onSavePreset?: (preset: PresetItem) => void;
   onSaveRoughPreset: (item: RoughPresetItem) => void;
   onDeleteRoughPreset: (id: string) => void;
   onResetRoughPresets: () => void;
   onToggleRestDay: () => void;
 }
 
-type ModalTab = 'rough' | 'calories' | 'detail';
+type ModalTab = 'rough' | 'ai' | 'calories' | 'detail';
 type RoughView = 'pick' | 'manage' | 'form';
 type ScaleKey = 'light' | 'normal' | 'heavy';
 
@@ -64,6 +75,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   isRestDay,
   onClose,
   onAdd,
+  onSavePreset,
   onSaveRoughPreset,
   onDeleteRoughPreset,
   onResetRoughPresets,
@@ -83,6 +95,17 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   const [roughF, setRoughF] = useState('');
   const [roughC, setRoughC] = useState('');
 
+  // AI検索タブ用ステート
+  const [aiResult, setAiResult] = useState<NutritionEstimateResult | null>(null);
+  const [aiName, setAiName] = useState('');
+  const [aiCategory, setAiCategory] = useState<CategoryType>('main');
+  const [aiAmount, setAiAmount] = useState('1');
+  const [aiUnit, setAiUnit] = useState('食');
+  const [aiP, setAiP] = useState('');
+  const [aiF, setAiF] = useState('');
+  const [aiC, setAiC] = useState('');
+  const [saveAsPreset, setSaveAsPreset] = useState(false);
+
   // カロリーだけタブ用ステート
   const [calName, setCalName] = useState('');
   const [calValue, setCalValue] = useState('');
@@ -101,6 +124,15 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       setActiveTab('rough');
       setRoughView('pick');
       setScaleKey('normal');
+      setAiResult(null);
+      setAiName('');
+      setAiCategory('main');
+      setAiAmount('1');
+      setAiUnit('食');
+      setAiP('');
+      setAiF('');
+      setAiC('');
+      setSaveAsPreset(false);
     }
   }, [isOpen, defaultMealType]);
 
@@ -242,6 +274,75 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
     parseFloat(roughC) || 0
   );
 
+  // AI検索結果のフォーム適用と送信
+  const handleApplyAiEstimate = (result: NutritionEstimateResult) => {
+    setAiResult(result);
+    setAiName(result.name);
+    setAiCategory(result.category);
+    setAiAmount(String(result.baseAmount));
+    setAiUnit(result.unit);
+    setAiP(String(result.baseP));
+    setAiF(String(result.baseF));
+    setAiC(String(result.baseC));
+  };
+
+  const numAiP = parseFloat(aiP) || 0;
+  const numAiF = parseFloat(aiF) || 0;
+  const numAiC = parseFloat(aiC) || 0;
+  const aiCal = calcCalories(numAiP, numAiF, numAiC);
+
+  const handleSubmitAi = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiName.trim()) return;
+
+    const currentAmount = Math.max(0.1, round1(parseFloat(aiAmount) || 1));
+    const safeUnit = aiUnit.trim() || '食';
+    const currentP = round1(numAiP);
+    const currentF = round1(numAiF);
+    const currentC = round1(numAiC);
+    const formattedAmount = Number.isInteger(currentAmount) ? currentAmount : round1(currentAmount);
+
+    const newLog: IntakeLogItem = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: `${aiName.trim()} ${formattedAmount}${safeUnit}`,
+      unit: safeUnit,
+      baseAmount: currentAmount,
+      currentAmount,
+      baseP: currentP,
+      baseF: currentF,
+      baseC: currentC,
+      currentP,
+      currentF,
+      currentC,
+      timestamp: Date.now(),
+      mealType,
+      isRough: aiResult ? aiResult.confidence !== 'high' : true,
+    };
+
+    onAdd(newLog);
+
+    if (saveAsPreset && onSavePreset) {
+      onSavePreset({
+        id: `preset-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        name: aiName.trim(),
+        category: aiCategory,
+        unit: safeUnit,
+        baseAmount: currentAmount,
+        baseP: currentP,
+        baseF: currentF,
+        baseC: currentC,
+      });
+    }
+
+    setAiResult(null);
+    setAiName('');
+    setAiP('');
+    setAiF('');
+    setAiC('');
+    setSaveAsPreset(false);
+    onClose();
+  };
+
   const showMealSelector = !(activeTab === 'rough' && roughView !== 'pick');
 
   return (
@@ -288,45 +389,57 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           </button>
         </div>
 
-        {/* 3タブ切替 */}
-        <div className="grid grid-cols-3 gap-1.5 bg-slate-950/90 p-1 rounded-2xl border border-slate-800">
+        {/* 4タブ切替 */}
+        <div className="grid grid-cols-4 gap-1 bg-slate-950/90 p-1 rounded-2xl border border-slate-800">
           <button
             type="button"
             onClick={() => {
               setActiveTab('rough');
               setRoughView('pick');
             }}
-            className={`py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+            className={`py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
               activeTab === 'rough'
                 ? 'bg-purple-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Zap className="w-3.5 h-3.5" />
+            <Zap className="w-3 h-3" />
             <span>ざっくり</span>
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('ai')}
+            className={`py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'ai'
+                ? 'bg-sky-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="w-3 h-3" />
+            <span>AI検索</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('calories')}
-            className={`py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+            className={`py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
               activeTab === 'calories'
                 ? 'bg-orange-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Flame className="w-3.5 h-3.5" />
-            <span>カロリーだけ</span>
+            <Flame className="w-3 h-3" />
+            <span>カロリー</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('detail')}
-            className={`py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+            className={`py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
               activeTab === 'detail'
                 ? 'bg-sky-500 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Sliders className="w-3.5 h-3.5" />
+            <Sliders className="w-3 h-3" />
             <span>詳細PFC</span>
           </button>
         </div>
@@ -646,7 +759,155 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           </form>
         )}
 
-        {/* ==================== タブ2: カロリーだけ入力 ==================== */}
+        {/* ==================== タブ2: AI栄養検索 ==================== */}
+        {activeTab === 'ai' && (
+          <div className="space-y-3">
+            <AiNutritionSearch onSelectResult={handleApplyAiEstimate} />
+
+            {aiResult && (
+              <form onSubmit={handleSubmitAi} className="space-y-3 animate-in fade-in duration-150">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">メニュー・品名</label>
+                  <input
+                    type="text"
+                    required
+                    value={aiName}
+                    onChange={(e) => setAiName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">基準量</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.1"
+                      required
+                      value={aiAmount}
+                      onFocus={(e) => {
+                        const el = e.target;
+                        setTimeout(() => el.select(), 50);
+                      }}
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                      onChange={(e) => setAiAmount(cleanNumberInput(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">単位</label>
+                    <input
+                      type="text"
+                      required
+                      value={aiUnit}
+                      onChange={(e) => setAiUnit(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300">推定PFC（微調整OK）</span>
+                    <span className="text-xs font-bold text-orange-400">{aiCal} kcal</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-sky-400 mb-1">P (g)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={aiP}
+                        onChange={(e) => setAiP(cleanNumberInput(e.target.value))}
+                        className="w-full bg-slate-900 border border-sky-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-400 mb-1">F (g)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={aiF}
+                        onChange={(e) => setAiF(cleanNumberInput(e.target.value))}
+                        className="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-emerald-400 mb-1">C (g)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={aiC}
+                        onChange={(e) => setAiC(cleanNumberInput(e.target.value))}
+                        className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl px-2 py-1.5 text-center text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 定番パーツにも同時保存するオプション */}
+                {onSavePreset && (
+                  <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-2.5 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={saveAsPreset}
+                        onChange={(e) => setSaveAsPreset(e.target.checked)}
+                        className="w-4 h-4 rounded accent-sky-500"
+                      />
+                      <span>定番パーツにも保存する（次回から1タップ）</span>
+                    </label>
+                    {saveAsPreset && (
+                      <div className="grid grid-cols-3 gap-1.5 pt-1">
+                        {[
+                          { id: 'staple', label: '主食' },
+                          { id: 'main', label: '主菜・P' },
+                          { id: 'sub', label: '副菜・他' },
+                        ].map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setAiCategory(cat.id as CategoryType)}
+                            className={`py-1.5 rounded-xl text-[11px] font-bold transition-all ${
+                              aiCategory === cat.id
+                                ? 'bg-sky-500 text-white'
+                                : 'bg-slate-900 border border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex-1 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>今日に追加</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ==================== タブ3: カロリーだけ入力 ==================== */}
         {activeTab === 'calories' && (
           <form onSubmit={handleSubmitCaloriesOnly} className="space-y-3.5">
             <div>

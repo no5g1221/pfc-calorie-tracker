@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import type { CategoryType, PresetItem } from '../types';
+import type { CategoryType, NutritionEstimateResult, PresetItem } from '../types';
 import { calcCalories, round1, cleanNumberInput } from '../utils/calculations';
+import { AiNutritionSearch } from './AiNutritionSearch';
 import { X, Check, Trash2, Plus, Edit2, ArrowLeft } from 'lucide-react';
 
 interface PresetManageModalProps {
@@ -55,6 +56,16 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
     setBaseF(preset.baseF === 0 ? '' : String(preset.baseF));
     setBaseC(preset.baseC === 0 ? '' : String(preset.baseC));
     setMode('form');
+  };
+
+  const handleApplyAiResult = (result: NutritionEstimateResult) => {
+    setName(result.name);
+    setCategory(result.category);
+    setBaseAmount(String(result.baseAmount));
+    setUnit(result.unit);
+    setBaseP(result.baseP === 0 ? '' : String(result.baseP));
+    setBaseF(result.baseF === 0 ? '' : String(result.baseF));
+    setBaseC(result.baseC === 0 ? '' : String(result.baseC));
   };
 
   const numBaseP = parseFloat(baseP) || 0;
@@ -198,6 +209,8 @@ export const PresetManageModal: React.FC<PresetManageModalProps> = ({
         ) : (
           /* パーツ入力・編集フォーム */
           <form onSubmit={handleSubmit} className="space-y-3.5">
+            <AiNutritionSearch compact onSelectResult={handleApplyAiResult} />
+
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1">食材パーツ名</label>
               <input

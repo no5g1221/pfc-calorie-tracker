@@ -67,3 +67,16 @@ export interface AppState {
 }
 
 export type CategoryType = 'staple' | 'main' | 'sub';
+
+// AI栄養成分推定の結果型定義
+export interface NutritionEstimateResult {
+  name: string;
+  category: CategoryType;
+  baseAmount: number;
+  unit: string;
+  baseP: number;
+  baseF: number;
+  baseC: number;
+  confidence: 'high' | 'medium' | 'low';
+  note: string;
+}

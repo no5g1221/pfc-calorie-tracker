@@ -570,6 +570,7 @@ export function App() {
         isRestDay={isSelectedRestDay}
         onClose={() => setIsQuickAddOpen(false)}
         onAdd={handleQuickAdd}
+        onSavePreset={handleSavePreset}
         onSaveRoughPreset={handleSaveRoughPreset}
         onDeleteRoughPreset={handleDeleteRoughPreset}
         onResetRoughPresets={handleResetRoughPresets}
