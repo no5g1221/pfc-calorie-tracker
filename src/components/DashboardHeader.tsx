@@ -6,11 +6,15 @@ import { Flame, Target } from 'lucide-react';
 interface DashboardHeaderProps {
   appState: AppState;
   onOpenTargetModal: () => void;
+  isRestDay?: boolean;
+  onToggleRestDay?: () => void;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   appState,
   onOpenTargetModal,
+  isRestDay = false,
+  onToggleRestDay,
 }) => {
   const { target, todayLogs } = appState;
   const totals = calculateTotals(todayLogs);
@@ -33,6 +37,23 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="w-full max-w-md mx-auto">
         {/* メインカロリーカード */}
         <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-4 shadow-xl">
+          {isRestDay && (
+            <div className="mb-3 px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/35 flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-purple-200">
+                🌿 お休み日（今日は気にせず楽しもう！）
+              </span>
+              {onToggleRestDay && (
+                <button
+                  type="button"
+                  onClick={onToggleRestDay}
+                  className="text-[11px] font-bold text-purple-300 hover:text-white bg-purple-500/20 hover:bg-purple-500/35 px-2 py-0.5 rounded-lg transition-colors shrink-0"
+                >
+                  解除
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             {/* 左側: 現在の摂取カロリー強調表示 */}
             <div className="flex items-center gap-2.5">
@@ -65,17 +86,23 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               </button>
 
               <div className="text-right">
-                <span className="text-[10px] text-slate-400 font-medium block">残り</span>
+                <span className="text-[10px] text-slate-400 font-medium block">
+                  {isRestDay ? '目安との差' : '残り'}
+                </span>
                 <span
                   className={`text-xs font-extrabold ${
-                    calorieRemaining < 0
+                    isRestDay
+                      ? 'text-purple-300'
+                      : calorieRemaining < 0
                       ? 'text-rose-400'
                       : isTargetAchieved
                       ? 'text-teal-400'
                       : 'text-emerald-400'
                   }`}
                 >
-                  {calorieRemaining >= 0
+                  {isRestDay
+                    ? 'お休みモード'
+                    : calorieRemaining >= 0
                     ? `${calorieRemaining} kcal`
                     : `+${Math.abs(calorieRemaining)} kcal 超過`}
                 </span>
@@ -88,7 +115,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <div className="h-2.5 w-full bg-slate-800/80 rounded-full overflow-hidden p-0.5 border border-slate-700/50">
               <div
                 className={`h-full rounded-full transition-all duration-500 ease-out ${
-                  isTargetAchieved
+                  isRestDay
+                    ? 'bg-gradient-to-r from-purple-500 to-fuchsia-400'
+                    : isTargetAchieved
                     ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
                     : 'bg-gradient-to-r from-indigo-500 to-sky-400'
                 }`}
@@ -97,7 +126,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
             <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium">
               <span>進捗率: <strong className="text-slate-200">{caloriePercent}%</strong></span>
-              <span>{isTargetAchieved ? '目標達成！' : `あと ${calorieRemaining} kcal`}</span>
+              <span>
+                {isRestDay
+                  ? '気楽にリフレッシュしよう 🌿'
+                  : isTargetAchieved
+                  ? '目標達成！'
+                  : `あと ${calorieRemaining} kcal`}
+              </span>
             </div>
           </div>
 

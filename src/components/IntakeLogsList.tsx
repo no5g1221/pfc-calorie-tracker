@@ -131,6 +131,11 @@ export const IntakeLogsList: React.FC<IntakeLogsListProps> = ({
                             <span className="font-bold text-sm text-white truncate group-hover:text-sky-300 transition-colors">
                               {log.name}
                             </span>
+                            {log.isRough && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-purple-300 shrink-0">
+                                ざっくり
+                              </span>
+                            )}
                             <span className="text-[10px] text-slate-500 flex items-center gap-0.5 shrink-0">
                               <Clock className="w-2.5 h-2.5" />
                               {formatTime(log.timestamp)}

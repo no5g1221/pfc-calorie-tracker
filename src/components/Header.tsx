@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, RefreshCw } from 'lucide-react';
+import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, RefreshCw, BarChart3 } from 'lucide-react';
 import { getTodayDateString } from '../utils/calculations';
 
 interface HeaderProps {
@@ -11,6 +11,7 @@ interface HeaderProps {
   onOpenTargetModal: () => void;
   onOpenQuickAdd: () => void;
   onOpenBackupModal: () => void;
+  onOpenWeeklyReview: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTargetModal,
   onOpenQuickAdd,
   onOpenBackupModal,
+  onOpenWeeklyReview,
 }) => {
   const today = getTodayDateString();
   const isPast = currentDate !== today;
@@ -93,15 +95,26 @@ export const Header: React.FC<HeaderProps> = ({
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`} />
           </button>
 
-          {/* 自由入力ボタン */}
+          {/* 週間ふりかえりボタン */}
+          <button
+            type="button"
+            onClick={onOpenWeeklyReview}
+            className="p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/40 text-slate-300 hover:text-sky-400 transition-all duration-150 active:scale-95 shadow-sm"
+            title="週間ふりかえり"
+            aria-label="週間ふりかえり"
+          >
+            <BarChart3 className="w-4 h-4" />
+          </button>
+
+          {/* ざっくり・自由入力ボタン */}
           <button
             type="button"
             onClick={onOpenQuickAdd}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all duration-150 active:scale-95 shadow-sm"
-            title="自由入力"
+            title="ざっくり / 自由入力"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">自由入力</span>
+            <span className="hidden xs:inline">ざっくり/自由</span>
           </button>
 
           {/* バックアップボタン */}

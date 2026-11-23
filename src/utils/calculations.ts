@@ -1,4 +1,4 @@
-import type { IntakeLogItem, PresetItem, MealType } from '../types';
+import type { IntakeLogItem, PresetItem, MealType, RoughPresetItem } from '../types';
 
 /**
  * ユーティリティ関数: 小数第1位に四捨五入する（浮動小数点丸め誤差防止）
@@ -37,14 +37,122 @@ export const calcTargetMacros = (calories: number, pRatio: number, fRatio: numbe
 };
 
 /**
+ * Dateをローカル時刻基準の YYYY-MM-DD 文字列に整形
+ */
+export const formatDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * YYYY-MM-DD 文字列をローカル時刻基準の Date に変換（UTCズレ防止）
+ */
+export const parseDateString = (dateStr: string): Date => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
+/**
+ * 指定日付から delta 日前後の YYYY-MM-DD を取得
+ */
+export const addDays = (dateStr: string, delta: number): string => {
+  const date = parseDateString(dateStr);
+  date.setDate(date.getDate() + delta);
+  return formatDateString(date);
+};
+
+/**
  * 今日の日付文字列を取得 (YYYY-MM-DD, ローカル時刻基準)
  */
 export const getTodayDateString = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return formatDateString(new Date());
+};
+
+/**
+ * 指定日を含む月〜日の7日間の日付文字列配列を返す
+ */
+export const getCurrentWeekDates = (baseDateStr: string = getTodayDateString()): string[] => {
+  const baseDate = parseDateString(baseDateStr);
+  const day = baseDate.getDay(); // 0:日, 1:月, ..., 6:土
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + diffToMonday);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+    return formatDateString(d);
+  });
+};
+
+/**
+ * 指定日を末尾とする直近 N 日間の日付文字列配列を古い順で返す
+ */
+export const getLastNDates = (n: number, endDateStr: string = getTodayDateString()): string[] => {
+  return Array.from({ length: n }, (_, i) => addDays(endDateStr, i - (n - 1)));
+};
+
+/**
+ * 2つの YYYY-MM-DD 日付文字列の整数日数差 (toDateStr - fromDateStr)
+ */
+export const diffDays = (fromDateStr: string, toDateStr: string): number => {
+  const from = parseDateString(fromDateStr);
+  const to = parseDateString(toDateStr);
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((to.getTime() - from.getTime()) / msPerDay);
+};
+
+/**
+ * カロリーとPFC比率から仮のPFCグラム数を換算（比率合計が100でない場合は 20/30/50 にフォールバック）
+ */
+export const calcMacrosFromCalories = (
+  calories: number,
+  pRatio: number,
+  fRatio: number,
+  cRatio: number
+): { p: number; f: number; c: number } => {
+  const safeCalories = Math.max(0, calories);
+  const isValidRatio = pRatio + fRatio + cRatio === 100;
+  const effP = isValidRatio ? pRatio : 20;
+  const effF = isValidRatio ? fRatio : 30;
+  const effC = isValidRatio ? cRatio : 50;
+
+  return {
+    p: round1((safeCalories * (effP / 100)) / 4),
+    f: round1((safeCalories * (effF / 100)) / 9),
+    c: round1((safeCalories * (effC / 100)) / 4),
+  };
+};
+
+/**
+ * ざっくり記録プリセットからIntakeLogItemを生成
+ */
+export const createRoughLogItem = (
+  preset: RoughPresetItem,
+  scale: number,
+  scaleLabel: string,
+  mealType: MealType
+): IntakeLogItem => {
+  const currentP = round1(preset.baseP * scale);
+  const currentF = round1(preset.baseF * scale);
+  const currentC = round1(preset.baseC * scale);
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    presetId: preset.id,
+    name: `${preset.icon} ${preset.name}（${scaleLabel}）`,
+    unit: '食',
+    baseAmount: 1,
+    currentAmount: scale,
+    baseP: preset.baseP,
+    baseF: preset.baseF,
+    baseC: preset.baseC,
+    currentP,
+    currentF,
+    currentC,
+    timestamp: Date.now(),
+    mealType,
+    isRough: true,
+  };
 };
 
 /**

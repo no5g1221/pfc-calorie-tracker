@@ -1,8 +1,20 @@
-import type { AppState, IntakeLogItem, PresetItem } from '../types';
-import { calcTargetMacros, getTodayDateString } from './calculations';
+import type { AppState, IntakeLogItem, PresetItem, RoughPresetItem } from '../types';
+import { calcTargetMacros, calculateTotals, getTodayDateString } from './calculations';
 
 export const STORAGE_KEY = 'pfc_tracker_app_state';
 export const HISTORY_ARCHIVE_KEY = 'pfc_tracker_daily_archives';
+
+// ざっくり記録用の定番メニュー8種（あとから編集・追加・削除可能）
+export const DEFAULT_ROUGH_PRESETS: RoughPresetItem[] = [
+  { id: 'rough-teishoku', name: '定食・丼もの', icon: '🍱', baseP: 28, baseF: 22, baseC: 105 },
+  { id: 'rough-ramen', name: 'ラーメン・麺類', icon: '🍜', baseP: 25, baseF: 25, baseC: 90 },
+  { id: 'rough-pasta', name: 'パスタ・洋食', icon: '🍝', baseP: 22, baseF: 26, baseC: 95 },
+  { id: 'rough-conbini', name: 'コンビニ・パン軽食', icon: '🥪', baseP: 15, baseF: 16, baseC: 60 },
+  { id: 'rough-izakaya', name: '居酒屋・飲み会', icon: '🍺', baseP: 35, baseF: 38, baseC: 70 },
+  { id: 'rough-sweets', name: 'カフェ・スイーツ', icon: '🍰', baseP: 5, baseF: 16, baseC: 45 },
+  { id: 'rough-salad', name: 'ヘルシー外食・サラダ', icon: '🥗', baseP: 30, baseF: 16, baseC: 50 },
+  { id: 'rough-curry', name: 'カレー・揚げ物系', icon: '🍛', baseP: 22, baseF: 32, baseC: 115 },
+];
 
 // ユーザー指定の厳密な初期プリセット（8品目）
 export const DEFAULT_PRESETS: PresetItem[] = [
@@ -111,6 +123,24 @@ export function getDefaultAppState(): AppState {
     },
     presets: DEFAULT_PRESETS,
     todayLogs: [],
+    roughPresets: DEFAULT_ROUGH_PRESETS,
+    weeklyGoalDays: 5,
+    restDays: [],
+  };
+}
+
+/**
+ * 旧バージョンからのデータ互換性を保ちつつ不足フィールドを補完する
+ */
+export function normalizeAppState(state: AppState): AppState {
+  const rawGoal = typeof state.weeklyGoalDays === 'number' ? state.weeklyGoalDays : 5;
+  const clampedGoal = Math.min(7, Math.max(3, Math.round(rawGoal)));
+
+  return {
+    ...state,
+    roughPresets: Array.isArray(state.roughPresets) ? state.roughPresets : DEFAULT_ROUGH_PRESETS,
+    weeklyGoalDays: clampedGoal,
+    restDays: Array.isArray(state.restDays) ? state.restDays : [],
   };
 }
 
@@ -164,6 +194,70 @@ export function getDatesWithLogs(todayLogs: IntakeLogItem[]): string[] {
 }
 
 /**
+ * 指定日より前で最も直近にログが存在する日付とそのログ一覧を取得
+ */
+export function getMostRecentLoggedDateBefore(
+  targetDate: string,
+  todayLogs: IntakeLogItem[]
+): { date: string; logs: IntakeLogItem[] } | null {
+  const archives = getDailyArchives();
+  const today = getTodayDateString();
+  const candidates: Record<string, IntakeLogItem[]> = { ...archives };
+
+  if (todayLogs.length > 0) {
+    candidates[today] = todayLogs;
+  }
+
+  const pastDates = Object.keys(candidates)
+    .filter((d) => d < targetDate && Array.isArray(candidates[d]) && candidates[d].length > 0)
+    .sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+
+  if (pastDates.length === 0) return null;
+  const latestDate = pastDates[0];
+  return {
+    date: latestDate,
+    logs: candidates[latestDate],
+  };
+}
+
+export interface DailySummaryItem {
+  date: string;
+  hasLogs: boolean;
+  isRestDay: boolean;
+  totalCalories: number;
+  totalP: number;
+  totalF: number;
+  totalC: number;
+}
+
+/**
+ * 指定された日付配列ごとの集計サマリーを取得（週間トラッカー・振り返り用）
+ */
+export function getDailySummariesForDates(
+  dates: string[],
+  todayLogs: IntakeLogItem[],
+  restDays: string[]
+): DailySummaryItem[] {
+  const today = getTodayDateString();
+  const archives = getDailyArchives();
+  const restSet = new Set(restDays);
+
+  return dates.map((date) => {
+    const logs = date === today ? todayLogs : archives[date] || [];
+    const totals = calculateTotals(logs);
+    return {
+      date,
+      hasLogs: logs.length > 0,
+      isRestDay: restSet.has(date),
+      totalCalories: totals.totalCalories,
+      totalP: totals.totalP,
+      totalF: totals.totalF,
+      totalC: totals.totalC,
+    };
+  });
+}
+
+/**
  * LocalStorageから状態を読み込み、日付変更時のハンドリングを実行
  */
 export function loadAppState(): AppState {
@@ -176,13 +270,15 @@ export function loadAppState(): AppState {
       return defaultState;
     }
 
-    const state: AppState = JSON.parse(raw);
+    const parsed: AppState = JSON.parse(raw);
 
-    if (!state.target || !Array.isArray(state.presets) || !Array.isArray(state.todayLogs)) {
+    if (!parsed.target || !Array.isArray(parsed.presets) || !Array.isArray(parsed.todayLogs)) {
       const defaultState = getDefaultAppState();
       saveAppState(defaultState);
       return defaultState;
     }
+
+    const state = normalizeAppState(parsed);
 
     // 日付変更時のデータハンドリング
     if (state.lastActiveDate !== today) {

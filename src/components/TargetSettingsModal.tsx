@@ -6,13 +6,15 @@ import { X, Check, Target, AlertTriangle } from 'lucide-react';
 interface TargetSettingsModalProps {
   isOpen: boolean;
   target: AppState['target'];
+  weeklyGoalDays: number;
   onClose: () => void;
-  onSave: (newTarget: AppState['target']) => void;
+  onSave: (newTarget: AppState['target'], weeklyGoalDays: number) => void;
 }
 
 export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
   isOpen,
   target,
+  weeklyGoalDays,
   onClose,
   onSave,
 }) => {
@@ -20,6 +22,7 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
   const [pRatio, setPRatio] = useState<number>(30);
   const [fRatio, setFRatio] = useState<number>(20);
   const [cRatio, setCRatio] = useState<number>(50);
+  const [goalDays, setGoalDays] = useState<number>(weeklyGoalDays);
 
   useEffect(() => {
     if (target) {
@@ -28,7 +31,8 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
       setFRatio(target.fRatio);
       setCRatio(target.cRatio);
     }
-  }, [target, isOpen]);
+    setGoalDays(weeklyGoalDays || 5);
+  }, [target, weeklyGoalDays, isOpen]);
 
   if (!isOpen) return null;
 
@@ -52,15 +56,18 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
 
   const handleSave = () => {
     if (!isRatioValid) return;
-    onSave({
-      calories: Math.max(500, numCalories),
-      pRatio,
-      fRatio,
-      cRatio,
-      targetP,
-      targetF,
-      targetC,
-    });
+    onSave(
+      {
+        calories: Math.max(500, numCalories),
+        pRatio,
+        fRatio,
+        cRatio,
+        targetP,
+        targetF,
+        targetC,
+      },
+      goalDays
+    );
     onClose();
   };
 
@@ -221,6 +228,33 @@ export const TargetSettingsModal: React.FC<TargetSettingsModalProps> = ({
               <div className="text-[10px] text-slate-500">{Math.round(targetC * 4)}kcal</div>
             </div>
           </div>
+        </div>
+
+        {/* 週のゆる記録目標日数 */}
+        <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-200">週のゆる記録目標</span>
+            <span className="text-xs font-extrabold text-emerald-400">週 {goalDays}日</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {[3, 4, 5, 6, 7].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setGoalDays(d)}
+                className={`py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  goalDays === d
+                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25'
+                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {d}日
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400">
+            1〜2日抜けても達成になるペースがおすすめ！
+          </p>
         </div>
 
         {/* ボタン */}

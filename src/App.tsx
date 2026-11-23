@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { AppState, IntakeLogItem, PresetItem, MealType } from './types';
+import type { AppState, IntakeLogItem, PresetItem, MealType, RoughPresetItem } from './types';
 import {
+  DEFAULT_ROUGH_PRESETS,
   loadAppState,
   saveAppState,
+  normalizeAppState,
   getLogsForDate,
   saveLogsForDate,
   getDatesWithLogs,
+  getMostRecentLoggedDateBefore,
 } from './utils/storage';
 import {
   createLogFromPreset,
@@ -14,9 +17,13 @@ import {
   calculateTotals,
   getDefaultMealType,
   getTodayDateString,
+  getCurrentWeekDates,
+  diffDays,
 } from './utils/calculations';
 import { Header } from './components/Header';
 import { DashboardHeader } from './components/DashboardHeader';
+import { HabitStrip } from './components/HabitStrip';
+import { QuickStartBanner } from './components/QuickStartBanner';
 import { MealSelector, meals } from './components/MealSelector';
 import { PresetGrid } from './components/PresetGrid';
 import { IntakeLogsList } from './components/IntakeLogsList';
@@ -26,6 +33,7 @@ import { TargetSettingsModal } from './components/TargetSettingsModal';
 import { QuickAddModal } from './components/QuickAddModal';
 import { DataBackupModal } from './components/DataBackupModal';
 import { CalendarModal } from './components/CalendarModal';
+import { WeeklyReviewModal } from './components/WeeklyReviewModal';
 import { Toast, type ToastMessage } from './components/Toast';
 import { GoalCelebration } from './components/GoalCelebration';
 
@@ -45,11 +53,17 @@ export function App() {
 
   // モーダル表示状態
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isWeeklyReviewOpen, setIsWeeklyReviewOpen] = useState(false);
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [selectedLogForEdit, setSelectedLogForEdit] = useState<IntakeLogItem | null>(null);
+
+  const roughPresets = appState.roughPresets ?? DEFAULT_ROUGH_PRESETS;
+  const weeklyGoalDays = appState.weeklyGoalDays ?? 5;
+  const restDays = appState.restDays ?? [];
+  const isSelectedRestDay = restDays.includes(selectedDate);
 
   // 日付ごとの目標達成演出発火済みフラグ（微調整による再発火防止）
   const celebratedByDateRef = useRef<Record<string, Set<MetricKey>>>({});
@@ -57,7 +71,7 @@ export function App() {
   // 選択中日付のログ一覧を取得
   const currentLogs = useMemo(() => {
     return getLogsForDate(selectedDate, appState.todayLogs);
-  }, [selectedDate, appState.todayLogs]);
+  }, [selectedDate, appState]);
 
   // 初回または日付切替時に、既に100%を超えている項目を発火済みとしてマーク（画面表示直後の誤発火防止）
   useEffect(() => {
@@ -76,6 +90,8 @@ export function App() {
   // 目標達成判定＆セレブレーション発火チェック
   const checkGoalAchievement = useCallback(
     (prevLogs: IntakeLogItem[], nextLogs: IntakeLogItem[]) => {
+      if (isSelectedRestDay) return;
+
       const prevTotals = calculateTotals(prevLogs);
       const nextTotals = calculateTotals(nextLogs);
       const { target } = appState;
@@ -135,13 +151,25 @@ export function App() {
         setIsCelebrationVisible(true);
       }
     },
-    [appState, selectedDate]
+    [appState, selectedDate, isSelectedRestDay]
   );
 
   // 記録が存在する日付一覧
   const loggedDates = useMemo(() => {
     return getDatesWithLogs(appState.todayLogs);
-  }, [appState.todayLogs]);
+  }, [appState]);
+
+  // 今週の日付（月〜日）と直近ログ情報
+  const weekDates = useMemo(() => getCurrentWeekDates(today), [today]);
+
+  const recentLogInfo = useMemo(() => {
+    return getMostRecentLoggedDateBefore(today, appState.todayLogs);
+  }, [today, appState]);
+
+  const daysSinceLastLog = useMemo(() => {
+    if (!recentLogInfo) return null;
+    return diffDays(recentLogInfo.date, today);
+  }, [recentLogInfo, today]);
 
   // 状態変更時のLocalStorage同期
   const updateStateAndPersist = useCallback((updater: (prev: AppState) => AppState) => {
@@ -271,12 +299,80 @@ export function App() {
   };
 
   // 目標設定の更新
-  const handleSaveTarget = (newTarget: AppState['target']) => {
+  const handleSaveTarget = (newTarget: AppState['target'], newWeeklyGoalDays: number) => {
     updateStateAndPersist((prev) => ({
       ...prev,
       target: newTarget,
+      weeklyGoalDays: newWeeklyGoalDays,
     }));
-    showToast('目標カロリー・PFCを更新しました');
+    showToast('目標設定を更新しました');
+  };
+
+  // お休み日（チートデイ）の切替
+  const handleToggleRestDay = () => {
+    const currentlyRest = restDays.includes(selectedDate);
+    updateStateAndPersist((prev) => {
+      const currentRestDays = prev.restDays ?? [];
+      const nextRestDays = currentlyRest
+        ? currentRestDays.filter((d) => d !== selectedDate)
+        : [...currentRestDays, selectedDate];
+      return {
+        ...prev,
+        restDays: nextRestDays,
+      };
+    });
+    if (currentlyRest) {
+      showToast('お休み日を解除しました');
+    } else {
+      showToast('🌿 お休み日に設定しました', '今日は気にせず楽しもう！');
+    }
+  };
+
+  // ざっくりメニューの保存・削除・リセット
+  const handleSaveRoughPreset = (item: RoughPresetItem) => {
+    updateStateAndPersist((prev) => {
+      const current = prev.roughPresets ?? DEFAULT_ROUGH_PRESETS;
+      const exists = current.some((r) => r.id === item.id);
+      const next = exists
+        ? current.map((r) => (r.id === item.id ? item : r))
+        : [item, ...current];
+      return { ...prev, roughPresets: next };
+    });
+    showToast('ざっくりメニューを保存しました');
+  };
+
+  const handleDeleteRoughPreset = (id: string) => {
+    updateStateAndPersist((prev) => {
+      const current = prev.roughPresets ?? DEFAULT_ROUGH_PRESETS;
+      return {
+        ...prev,
+        roughPresets: current.filter((r) => r.id !== id),
+      };
+    });
+    showToast('ざっくりメニューを削除しました');
+  };
+
+  const handleResetRoughPresets = () => {
+    updateStateAndPersist((prev) => ({
+      ...prev,
+      roughPresets: DEFAULT_ROUGH_PRESETS,
+    }));
+    showToast('ざっくりメニューを定番8種に戻しました');
+  };
+
+  // 前回記録のコピー
+  const handleCopyRecentLogs = () => {
+    if (!recentLogInfo || recentLogInfo.logs.length === 0) return;
+    const now = Date.now();
+    const copied: IntakeLogItem[] = recentLogInfo.logs.map((log, idx) => ({
+      ...log,
+      id: `${now}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: now,
+    }));
+    const updated = [...copied, ...currentLogs];
+    checkGoalAchievement(currentLogs, updated);
+    updateLogsForSelectedDate(updated);
+    showToast(`前回の食事（${copied.length}品）をコピーしました`);
   };
 
   // 食材パーツ（プリセット）の作成・更新
@@ -315,9 +411,10 @@ export function App() {
 
   // バックアップ復元
   const handleRestoreState = (newState: AppState) => {
-    setAppState(newState);
-    saveAppState(newState);
-    setSelectedDate(newState.lastActiveDate);
+    const normalized = normalizeAppState(newState);
+    setAppState(normalized);
+    saveAppState(normalized);
+    setSelectedDate(normalized.lastActiveDate);
   };
 
   // 表示用AppState（サマリー表示にcurrentLogsを反映）
@@ -350,6 +447,7 @@ export function App() {
           onOpenTargetModal={() => setIsTargetModalOpen(true)}
           onOpenQuickAdd={() => setIsQuickAddOpen(true)}
           onOpenBackupModal={() => setIsBackupOpen(true)}
+          onOpenWeeklyReview={() => setIsWeeklyReviewOpen(true)}
         />
       </div>
 
@@ -357,10 +455,33 @@ export function App() {
       <DashboardHeader
         appState={displayState}
         onOpenTargetModal={() => setIsTargetModalOpen(true)}
+        isRestDay={isSelectedRestDay}
+        onToggleRestDay={handleToggleRestDay}
       />
 
       {/* メインスクロールエリア */}
       <main className="w-full max-w-md mx-auto px-4 pt-3 pb-16 space-y-3.5 flex-1">
+        {/* 今週のゆる継続スタンプバー */}
+        <HabitStrip
+          weekDates={weekDates}
+          today={today}
+          loggedDates={loggedDates}
+          restDays={restDays}
+          weeklyGoalDays={weeklyGoalDays}
+          onOpenWeeklyReview={() => setIsWeeklyReviewOpen(true)}
+        />
+
+        {/* 今日・記録0件・お休み日でないときのスタートガイド */}
+        {selectedDate === today && currentLogs.length === 0 && !isSelectedRestDay && (
+          <QuickStartBanner
+            daysSinceLastLog={daysSinceLastLog}
+            recentLogInfo={recentLogInfo}
+            onCopyRecentLogs={handleCopyRecentLogs}
+            onOpenRoughAdd={() => setIsQuickAddOpen(true)}
+            onMarkRestDay={handleToggleRestDay}
+          />
+        )}
+
         {/* 食事区分セレクター（朝食 / 昼食 / 夕食 / 間食） */}
         <MealSelector
           activeMealType={activeMealType}
@@ -391,8 +512,20 @@ export function App() {
         isOpen={isCalendarOpen}
         selectedDate={selectedDate}
         loggedDates={loggedDates}
+        restDays={restDays}
         onSelectDate={setSelectedDate}
         onClose={() => setIsCalendarOpen(false)}
+      />
+
+      {/* 0.5. 週間ふりかえりモーダル */}
+      <WeeklyReviewModal
+        isOpen={isWeeklyReviewOpen}
+        onClose={() => setIsWeeklyReviewOpen(false)}
+        target={appState.target}
+        todayLogs={appState.todayLogs}
+        restDays={restDays}
+        weeklyGoalDays={weeklyGoalDays}
+        loggedDates={loggedDates}
       />
 
       {/* 1. 量・食事区分の再調整モーダル */}
@@ -423,16 +556,24 @@ export function App() {
       <TargetSettingsModal
         isOpen={isTargetModalOpen}
         target={appState.target}
+        weeklyGoalDays={weeklyGoalDays}
         onClose={() => setIsTargetModalOpen(false)}
         onSave={handleSaveTarget}
       />
 
-      {/* 4. 自由入力モーダル */}
+      {/* 4. ざっくり・自由入力モーダル */}
       <QuickAddModal
         isOpen={isQuickAddOpen}
         defaultMealType={activeMealType}
+        target={appState.target}
+        roughPresets={roughPresets}
+        isRestDay={isSelectedRestDay}
         onClose={() => setIsQuickAddOpen(false)}
         onAdd={handleQuickAdd}
+        onSaveRoughPreset={handleSaveRoughPreset}
+        onDeleteRoughPreset={handleDeleteRoughPreset}
+        onResetRoughPresets={handleResetRoughPresets}
+        onToggleRestDay={handleToggleRestDay}
       />
 
       {/* 5. バックアップ＆PWA設定モーダル */}

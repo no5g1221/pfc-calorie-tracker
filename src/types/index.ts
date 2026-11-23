@@ -18,6 +18,16 @@ export interface PresetItem {
   baseC: number;          // 基準量に対する炭水化物(g)（例: 55.7）
 }
 
+// ざっくり記録プリセットの型定義
+export interface RoughPresetItem {
+  id: string;
+  name: string;   // 例: "定食・丼もの"
+  icon: string;   // 例: "🍱"
+  baseP: number;  // 普通(1.0x)の目安P(g)
+  baseF: number;  // 普通(1.0x)の目安F(g)
+  baseC: number;  // 普通(1.0x)の目安C(g)
+}
+
 // 今日の摂取履歴の型定義
 export interface IntakeLogItem {
   id: string;
@@ -34,6 +44,7 @@ export interface IntakeLogItem {
   currentC: number;       // 計算後のC = round1(baseC * (currentAmount / baseAmount))
   timestamp: number;
   mealType?: MealType;    // 朝食 / 昼食 / 夕食 / 間食
+  isRough?: boolean;      // ざっくり記録・カロリーのみ入力フラグ
 }
 
 // アプリ全体のLocalStorage保存型定義
@@ -50,6 +61,9 @@ export interface AppState {
   };
   presets: PresetItem[];  // ユーザーが編集・追加した食材パーツ（翌日も保持）
   todayLogs: IntakeLogItem[]; // 当日の摂取履歴（日付が変わったら空配列にリセット）
+  roughPresets?: RoughPresetItem[]; // ざっくり記録用メニュー（未設定時はデフォルト8種で補完）
+  weeklyGoalDays?: number;          // 週のゆる記録目標日数（デフォルト5日）
+  restDays?: string[];              // お休み・チートデイに設定した日付配列 (YYYY-MM-DD)
 }
 
 export type CategoryType = 'staple' | 'main' | 'sub';

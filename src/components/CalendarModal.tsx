@@ -6,6 +6,7 @@ interface CalendarModalProps {
   isOpen: boolean;
   selectedDate: string; // YYYY-MM-DD
   loggedDates: string[]; // 記録がある日付の配列
+  restDays: string[]; // お休み日に設定した日付の配列
   onSelectDate: (date: string) => void;
   onClose: () => void;
 }
@@ -14,6 +15,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   isOpen,
   selectedDate,
   loggedDates,
+  restDays,
   onSelectDate,
   onClose,
 }) => {
@@ -76,6 +78,12 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
 
   const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
 
+  const currentMonthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+  const monthRecordedDays = new Set([
+    ...loggedDates.filter((d) => d.startsWith(currentMonthPrefix)),
+    ...restDays.filter((d) => d.startsWith(currentMonthPrefix)),
+  ]).size;
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom duration-200">
@@ -107,8 +115,13 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <div className="text-sm font-black text-white">
-            {currentYear}年 {currentMonth + 1}月
+          <div className="text-center">
+            <div className="text-sm font-black text-white">
+              {currentYear}年 {currentMonth + 1}月
+            </div>
+            <div className="text-[10px] font-bold text-emerald-400">
+              この月の記録: {monthRecordedDays}日
+            </div>
           </div>
           <button
             type="button"
@@ -146,6 +159,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
             const isSelected = selectedDate === dateStr;
             const isToday = today === dateStr;
             const hasLog = loggedDates.includes(dateStr);
+            const isRestDay = restDays.includes(dateStr);
 
             return (
               <button
@@ -160,17 +174,40 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                 }`}
               >
                 <span>{day}</span>
-                {/* 記録がある日のドットマーク */}
-                {hasLog && (
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
-                      isSelected ? 'bg-white' : 'bg-orange-400'
-                    }`}
-                  />
+                {/* 記録がある日・お休み日のドットマーク */}
+                {(hasLog || isRestDay) && (
+                  <span className="flex items-center gap-0.5 mt-0.5">
+                    {hasLog && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isSelected ? 'bg-white' : 'bg-orange-400'
+                        }`}
+                      />
+                    )}
+                    {isRestDay && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isSelected ? 'bg-purple-200' : 'bg-purple-400'
+                        }`}
+                      />
+                    )}
+                  </span>
                 )}
               </button>
             );
           })}
+        </div>
+
+        {/* 凡例 */}
+        <div className="flex items-center justify-center gap-4 text-[10px] text-slate-400">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-orange-400" />
+            記録あり
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-purple-400" />
+            お休み日
+          </span>
         </div>
 
         {/* フッター: 今日に戻る & 閉じる */}
