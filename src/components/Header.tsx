@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, RefreshCw, BarChart3 } from 'lucide-react';
+import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, RefreshCw, BarChart3, Bell } from 'lucide-react';
 import { getTodayDateString } from '../utils/calculations';
 
 interface HeaderProps {
@@ -12,6 +12,8 @@ interface HeaderProps {
   onOpenQuickAdd: () => void;
   onOpenBackupModal: () => void;
   onOpenWeeklyReview: () => void;
+  onOpenNotificationModal: () => void;
+  isNotificationEnabled?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,6 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQuickAdd,
   onOpenBackupModal,
   onOpenWeeklyReview,
+  onOpenNotificationModal,
+  isNotificationEnabled = false,
 }) => {
   const today = getTodayDateString();
   const isPast = currentDate !== today;
@@ -104,6 +108,20 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="週間ふりかえり"
           >
             <BarChart3 className="w-4 h-4" />
+          </button>
+
+          {/* 通知設定ボタン */}
+          <button
+            type="button"
+            onClick={onOpenNotificationModal}
+            className="relative p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400 transition-all duration-150 active:scale-95 shadow-sm"
+            title="通知リマインダー設定"
+            aria-label="通知設定"
+          >
+            <Bell className="w-4 h-4" />
+            {isNotificationEnabled && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            )}
           </button>
 
           {/* ざっくり・自由入力ボタン */}

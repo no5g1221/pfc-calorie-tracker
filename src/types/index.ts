@@ -80,3 +80,17 @@ export interface NutritionEstimateResult {
   confidence: 'high' | 'medium' | 'low';
   note: string;
 }
+
+// プッシュ通知リマインダー設定の型定義
+export type ReminderSlotKey = 'morning' | 'lunch' | 'dinner';
+
+export interface ReminderSlotConfig {
+  enabled: boolean;
+  time: string; // "HH:MM"
+}
+
+export interface ReminderSettings {
+  enabled: boolean;
+  token?: string;
+  slots: Record<ReminderSlotKey, ReminderSlotConfig>;
+}

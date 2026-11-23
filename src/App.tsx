@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { AppState, IntakeLogItem, PresetItem, MealType, RoughPresetItem } from './types';
+import type { AppState, IntakeLogItem, PresetItem, MealType, RoughPresetItem, ReminderSettings } from './types';
 import {
   DEFAULT_ROUGH_PRESETS,
   loadAppState,
@@ -34,6 +34,8 @@ import { QuickAddModal } from './components/QuickAddModal';
 import { DataBackupModal } from './components/DataBackupModal';
 import { CalendarModal } from './components/CalendarModal';
 import { WeeklyReviewModal } from './components/WeeklyReviewModal';
+import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import { loadReminderSettings } from './utils/pushNotifications';
 import { Toast, type ToastMessage } from './components/Toast';
 import { GoalCelebration } from './components/GoalCelebration';
 
@@ -54,11 +56,15 @@ export function App() {
   // モーダル表示状態
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isWeeklyReviewOpen, setIsWeeklyReviewOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [selectedLogForEdit, setSelectedLogForEdit] = useState<IntakeLogItem | null>(null);
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(() =>
+    loadReminderSettings()
+  );
 
   const roughPresets = appState.roughPresets ?? DEFAULT_ROUGH_PRESETS;
   const weeklyGoalDays = appState.weeklyGoalDays ?? 5;
@@ -448,6 +454,8 @@ export function App() {
           onOpenQuickAdd={() => setIsQuickAddOpen(true)}
           onOpenBackupModal={() => setIsBackupOpen(true)}
           onOpenWeeklyReview={() => setIsWeeklyReviewOpen(true)}
+          onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
+          isNotificationEnabled={reminderSettings.enabled}
         />
       </div>
 
@@ -583,6 +591,15 @@ export function App() {
         appState={appState}
         onClose={() => setIsBackupOpen(false)}
         onRestoreState={handleRestoreState}
+      />
+
+      {/* 6. 通知リマインダー設定モーダル */}
+      <NotificationSettingsModal
+        isOpen={isNotificationModalOpen}
+        settings={reminderSettings}
+        onClose={() => setIsNotificationModalOpen(false)}
+        onChangeSettings={setReminderSettings}
+        onShowToast={showToast}
       />
     </div>
   );
