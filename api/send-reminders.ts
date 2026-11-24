@@ -5,8 +5,15 @@ import {
   listSubscriptions,
   sendFcmDataPush,
   updateLastSent,
+  type ActivityMealKey,
   type ReminderSlotKey,
 } from './_lib/firebaseRest.js';
+
+const SLOT_TO_MEAL: Record<ReminderSlotKey, ActivityMealKey> = {
+  morning: 'breakfast',
+  lunch: 'lunch',
+  dinner: 'dinner',
+};
 
 const SLOT_MESSAGES: Record<ReminderSlotKey, { title: string; body: string }> = {
   morning: {
@@ -72,6 +79,7 @@ export async function POST(request: Request): Promise<Response> {
 
     let checked = 0;
     let sent = 0;
+    let skipped = 0;
     let removed = 0;
 
     for (const item of subscriptions) {
@@ -91,6 +99,19 @@ export async function POST(request: Request): Promise<Response> {
 
         // GitHub Actionsのcron遅延を考慮して前後15分以内を対象にする
         if (Math.abs(nowMinutes - slotMinutes) > 15) continue;
+
+        // 当日（JST）の記録済み区分・お休み日がサーバーへ同期されていれば送信を自動スキップ
+        if (doc.activityDate === todayJst) {
+          if (doc.isRestDay === true) {
+            skipped += 1;
+            continue;
+          }
+          const targetMeal = SLOT_TO_MEAL[slotKey];
+          if (doc.loggedMeals?.includes(targetMeal)) {
+            skipped += 1;
+            continue;
+          }
+        }
 
         const msg = SLOT_MESSAGES[slotKey];
         const pushResult = await sendFcmDataPush(doc.token, {
@@ -118,7 +139,7 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    return Response.json({ ok: true, todayJst, checked, sent, removed }, { status: 200 });
+    return Response.json({ ok: true, todayJst, checked, sent, skipped, removed }, { status: 200 });
   } catch (err) {
     if (err instanceof FirebaseConfigError) {
       console.error('[send-reminders] Config error:', err.message);

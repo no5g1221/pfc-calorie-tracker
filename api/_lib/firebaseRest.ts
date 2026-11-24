@@ -1,6 +1,7 @@
 import { createHash, createSign } from 'node:crypto';
 
 export type ReminderSlotKey = 'morning' | 'lunch' | 'dinner';
+export type ActivityMealKey = 'breakfast' | 'lunch' | 'dinner';
 
 export interface ReminderSlotConfig {
   enabled: boolean;
@@ -15,6 +16,9 @@ export interface PushSubscriptionDoc {
   slots: ReminderSlots;
   lastSent: Partial<Record<ReminderSlotKey, string>>;
   updatedAt: string;
+  activityDate?: string;
+  loggedMeals?: ActivityMealKey[];
+  isRestDay?: boolean;
 }
 
 interface ServiceAccountInfo {
@@ -59,6 +63,19 @@ export function sanitizeSlots(input?: Partial<ReminderSlots> | null): ReminderSl
     lunch: sanitizeOne('lunch'),
     dinner: sanitizeOne('dinner'),
   };
+}
+
+const VALID_ACTIVITY_MEALS = new Set<ActivityMealKey>(['breakfast', 'lunch', 'dinner']);
+
+export function sanitizeLoggedMeals(input: unknown): ActivityMealKey[] {
+  if (!Array.isArray(input)) return [];
+  const set = new Set<ActivityMealKey>();
+  for (const item of input) {
+    if (typeof item === 'string' && VALID_ACTIVITY_MEALS.has(item as ActivityMealKey)) {
+      set.add(item as ActivityMealKey);
+    }
+  }
+  return Array.from(set).sort();
 }
 
 export function getServiceAccountFromEnv(): ServiceAccountInfo {
@@ -213,6 +230,9 @@ function toFirestoreFields(doc: PushSubscriptionDoc): Record<string, FirestoreVa
     },
     lastSent: buildLastSentFirestoreMap(doc.lastSent || {}),
     updatedAt: { stringValue: doc.updatedAt },
+    activityDate: { stringValue: doc.activityDate || '' },
+    loggedMeals: { stringValue: (doc.loggedMeals || []).join(',') },
+    isRestDay: { booleanValue: Boolean(doc.isRestDay) },
   };
 }
 
@@ -260,6 +280,14 @@ function fromFirestoreDocument(raw: FirestoreDocument): { id: string; doc: PushS
     }
   }
 
+  const rawActivityDate = getStringField(fields.activityDate)?.trim();
+  const activityDate = rawActivityDate ? rawActivityDate : undefined;
+  const rawLoggedMeals = getStringField(fields.loggedMeals);
+  const loggedMeals = rawLoggedMeals
+    ? sanitizeLoggedMeals(rawLoggedMeals.split(',').map((s) => s.trim()))
+    : [];
+  const isRestDay = getBoolField(fields.isRestDay) ?? false;
+
   return {
     id,
     doc: {
@@ -272,6 +300,9 @@ function fromFirestoreDocument(raw: FirestoreDocument): { id: string; doc: PushS
       },
       lastSent,
       updatedAt: getStringField(fields.updatedAt) || new Date().toISOString(),
+      activityDate,
+      loggedMeals,
+      isRestDay,
     },
   };
 }

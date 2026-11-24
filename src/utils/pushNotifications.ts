@@ -1,8 +1,23 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getMessaging, getToken } from 'firebase/messaging';
-import type { ReminderSettings, ReminderSlotKey } from '../types';
+import type { MealType, ReminderSettings, ReminderSlotKey } from '../types';
 
 const REMINDER_STORAGE_KEY = 'pfc_tracker_reminder_settings';
+const LAST_SYNCED_ACTIVITY_KEY = 'pfc_tracker_last_synced_activity';
+const SYNCABLE_MEALS = new Set<string>(['breakfast', 'lunch', 'dinner']);
+
+let inFlightSyncKey: string | null = null;
+let latestRequestedSyncKey: string | null = null;
+
+export function clearLastSyncedActivity(): void {
+  inFlightSyncKey = null;
+  latestRequestedSyncKey = null;
+  try {
+    localStorage.removeItem(LAST_SYNCED_ACTIVITY_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
 
 interface FirebasePublicConfig {
   apiKey: string;
@@ -193,6 +208,7 @@ export async function enablePushNotifications(
     slots,
   };
   saveReminderSettingsLocal(nextSettings);
+  clearLastSyncedActivity();
   return nextSettings;
 }
 
@@ -227,9 +243,68 @@ export async function disablePushNotifications(
     slots: currentSettings.slots,
   };
   saveReminderSettingsLocal(nextSettings);
+  clearLastSyncedActivity();
   return nextSettings;
 }
 
 export async function sendTestPushNotification(token: string): Promise<void> {
   await callSubscriptionApi({ action: 'test', token });
+}
+
+export async function syncPushActivity(
+  settings: ReminderSettings,
+  activity: { date: string; loggedMeals: MealType[]; isRestDay: boolean }
+): Promise<void> {
+  if (!settings.enabled || !settings.token || !isPushConfigured()) {
+    return;
+  }
+
+  const meals = Array.from(
+    new Set(activity.loggedMeals.filter((meal) => SYNCABLE_MEALS.has(meal)))
+  ).sort();
+  const syncKey = `${settings.token.slice(-12)}|${activity.date}|${activity.isRestDay ? '1' : '0'}|${meals.join(',')}`;
+
+  try {
+    if (localStorage.getItem(LAST_SYNCED_ACTIVITY_KEY) === syncKey) {
+      return;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  if (inFlightSyncKey === syncKey) {
+    return;
+  }
+
+  inFlightSyncKey = syncKey;
+  latestRequestedSyncKey = syncKey;
+
+  try {
+    const res = await fetch('/api/push-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        action: 'sync-activity',
+        token: settings.token,
+        activityDate: activity.date,
+        loggedMeals: meals,
+        isRestDay: activity.isRestDay,
+      }),
+    });
+
+    if (res.ok && latestRequestedSyncKey === syncKey) {
+      try {
+        localStorage.setItem(LAST_SYNCED_ACTIVITY_KEY, syncKey);
+      } catch {
+        // ignore storage errors
+      }
+    }
+  } catch {
+    // オフライン時や通信エラー時はユーザー操作を妨げず静かに無視
+  } finally {
+    if (inFlightSyncKey === syncKey) {
+      inFlightSyncKey = null;
+    }
+  }
 }

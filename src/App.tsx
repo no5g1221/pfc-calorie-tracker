@@ -48,11 +48,12 @@ import { DataBackupModal } from './components/DataBackupModal';
 import { CalendarModal } from './components/CalendarModal';
 import { WeeklyReviewModal } from './components/WeeklyReviewModal';
 import { NotificationSettingsModal } from './components/NotificationSettingsModal';
-import { loadReminderSettings } from './utils/pushNotifications';
+import { loadReminderSettings, syncPushActivity } from './utils/pushNotifications';
 import { Toast, type ToastMessage } from './components/Toast';
 import { GoalCelebration } from './components/GoalCelebration';
 
 type MetricKey = 'calories' | 'p' | 'f' | 'c';
+const EMPTY_REST_DAYS: string[] = [];
 
 export function App() {
   const [appState, setAppState] = useState<AppState>(() => loadAppState());
@@ -101,7 +102,7 @@ export function App() {
 
   const roughPresets = appState.roughPresets ?? DEFAULT_ROUGH_PRESETS;
   const weeklyGoalDays = appState.weeklyGoalDays ?? 5;
-  const restDays = appState.restDays ?? [];
+  const restDays = appState.restDays ?? EMPTY_REST_DAYS;
   const mealCombos = appState.mealCombos ?? [];
   const isSelectedRestDay = restDays.includes(selectedDate);
 
@@ -298,6 +299,31 @@ export function App() {
       clearInterval(interval);
     };
   }, []);
+
+  // 当日（today）の記録済み食事区分・お休み状態をバックグラウンドで通知サーバーへ差分同期
+  const todayLoggedMeals = useMemo(() => {
+    return appState.todayLogs.map(
+      (log) => log.mealType || getDefaultMealType(new Date(log.timestamp))
+    );
+  }, [appState.todayLogs]);
+
+  const isTodayRestDay = restDays.includes(today);
+
+  useEffect(() => {
+    const runSync = () => {
+      void syncPushActivity(reminderSettings, {
+        date: today,
+        loggedMeals: todayLoggedMeals,
+        isRestDay: isTodayRestDay,
+      });
+    };
+
+    runSync();
+    window.addEventListener('online', runSync);
+    return () => {
+      window.removeEventListener('online', runSync);
+    };
+  }, [reminderSettings, today, todayLoggedMeals, isTodayRestDay]);
 
   const showToast = useCallback((text: string, subText?: string, onUndo?: () => void) => {
     setToast({

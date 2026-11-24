@@ -2,6 +2,7 @@ import {
   FirebaseConfigError,
   deleteSubscriptionByToken,
   getSubscriptionByToken,
+  sanitizeLoggedMeals,
   sanitizeSlots,
   sendFcmDataPush,
   upsertSubscription,
@@ -12,7 +13,12 @@ interface PushSubscriptionRequestBody {
   action?: unknown;
   token?: unknown;
   slots?: unknown;
+  activityDate?: unknown;
+  loggedMeals?: unknown;
+  isRestDay?: unknown;
 }
+
+const ACTIVITY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -29,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
     const action = typeof body.action === 'string' ? body.action : '';
     const token = typeof body.token === 'string' ? body.token.trim() : '';
 
-    if (!['save', 'delete', 'test'].includes(action)) {
+    if (!['save', 'delete', 'test', 'sync-activity'].includes(action)) {
       return Response.json(
         { error: '不正なアクションです。', code: 'INVALID_ACTION' },
         { status: 400 }
@@ -53,6 +59,36 @@ export async function POST(request: Request): Promise<Response> {
         enabled: true,
         slots,
         lastSent: existing?.lastSent || {},
+        activityDate: existing?.activityDate,
+        loggedMeals: existing?.loggedMeals || [],
+        isRestDay: existing?.isRestDay ?? false,
+        updatedAt: new Date().toISOString(),
+      });
+      return Response.json({ ok: true }, { status: 200 });
+    }
+
+    if (action === 'sync-activity') {
+      const activityDate = typeof body.activityDate === 'string' ? body.activityDate.trim() : '';
+      if (!ACTIVITY_DATE_PATTERN.test(activityDate)) {
+        return Response.json(
+          { error: '日付形式が不正です。', code: 'INVALID_ACTIVITY_DATE' },
+          { status: 400 }
+        );
+      }
+
+      const existing = await getSubscriptionByToken(token);
+      if (!existing) {
+        return Response.json({ ok: true, skipped: true }, { status: 200 });
+      }
+
+      await upsertSubscription({
+        token: existing.token,
+        enabled: existing.enabled,
+        slots: existing.slots,
+        lastSent: existing.lastSent || {},
+        activityDate,
+        loggedMeals: sanitizeLoggedMeals(body.loggedMeals),
+        isRestDay: Boolean(body.isRestDay),
         updatedAt: new Date().toISOString(),
       });
       return Response.json({ ok: true }, { status: 200 });
