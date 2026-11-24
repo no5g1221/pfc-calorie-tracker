@@ -1,7 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import type { CategoryType, PresetItem, IntakeLogItem, MealComboItem, MealComboEntry } from '../types';
 import { calcCalories, round1 } from '../utils/calculations';
-import { Plus, SlidersHorizontal, Search, BookmarkPlus, Trash2 } from 'lucide-react';
+import {
+  Plus,
+  SlidersHorizontal,
+  Search,
+  BookmarkPlus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 
 interface PresetGridProps {
   presets: PresetItem[];
@@ -15,6 +23,8 @@ interface PresetGridProps {
 }
 
 type PresetTabId = 'combo' | 'frequent' | CategoryType;
+
+const FREQUENT_COLLAPSED_LIMIT = 6;
 
 const calcComboTotals = (entries: MealComboEntry[]) => {
   return entries.reduce(
@@ -61,6 +71,7 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
   onDeleteMealCombo,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<PresetTabId>('frequent');
+  const [isFrequentExpanded, setIsFrequentExpanded] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -113,6 +124,11 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
     });
   }, [mealCombos, searchQuery]);
 
+  const handleSelectCategory = (tabId: PresetTabId) => {
+    setSelectedCategory(tabId);
+    setIsFrequentExpanded(false);
+  };
+
   const handleToggleSearch = () => {
     setIsSearchOpen((prev) => {
       if (prev) {
@@ -121,6 +137,15 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
       return !prev;
     });
   };
+
+  const isFrequentUnsearched = selectedCategory === 'frequent' && searchQuery.trim() === '';
+  const canToggleFrequentExpand =
+    isFrequentUnsearched && filteredPresets.length > FREQUENT_COLLAPSED_LIMIT;
+  const hiddenFrequentCount = Math.max(0, filteredPresets.length - FREQUENT_COLLAPSED_LIMIT);
+  const visiblePresets =
+    canToggleFrequentExpand && !isFrequentExpanded
+      ? filteredPresets.slice(0, FREQUENT_COLLAPSED_LIMIT)
+      : filteredPresets;
 
   const handleTap = (preset: PresetItem) => {
     triggerTapVibrate();
@@ -176,7 +201,7 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setSelectedCategory(cat.id)}
+                onClick={() => handleSelectCategory(cat.id)}
                 className={`relative text-[11px] font-bold whitespace-nowrap py-2 px-0.5 rounded-xl transition-all duration-150 active:scale-95 text-center ${
                   isSelected
                     ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/25'
@@ -313,7 +338,7 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2.5">
-            {filteredPresets.map((preset) => {
+            {visiblePresets.map((preset) => {
               const cal = calcCalories(preset.baseP, preset.baseF, preset.baseC);
               const count = tapCounts[preset.id] || 0;
 
@@ -357,6 +382,26 @@ export const PresetGrid: React.FC<PresetGridProps> = ({
               );
             })}
           </div>
+
+          {canToggleFrequentExpand && (
+            <button
+              type="button"
+              onClick={() => setIsFrequentExpanded((prev) => !prev)}
+              className="min-h-[40px] w-full rounded-xl bg-slate-900/70 hover:bg-slate-800/80 border border-slate-800 text-xs font-bold text-slate-300 hover:text-sky-300 transition-all duration-150 active:scale-[0.99] flex items-center justify-center gap-1.5"
+            >
+              {isFrequentExpanded ? (
+                <>
+                  <span>上位6件に戻す</span>
+                  <ChevronUp className="w-4 h-4 shrink-0" />
+                </>
+              ) : (
+                <>
+                  <span>すべて表示（残り{hiddenFrequentCount}件）</span>
+                  <ChevronDown className="w-4 h-4 shrink-0" />
+                </>
+              )}
+            </button>
+          )}
 
           {filteredPresets.length === 0 && (
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-6 text-center space-y-2">
