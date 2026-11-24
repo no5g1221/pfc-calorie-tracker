@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import type { AppState } from '../types';
-import { DEFAULT_PRESETS } from '../utils/storage';
+import type { AppState, IntakeLogItem } from '../types';
+import { DEFAULT_PRESETS, createBackupPayload, parseBackupJson } from '../utils/storage';
 import { X, Copy, Check, RotateCcw, Upload, FileText, Smartphone, RefreshCw } from 'lucide-react';
 
 interface DataBackupModalProps {
   isOpen: boolean;
   appState: AppState;
   onClose: () => void;
-  onRestoreState: (state: AppState) => void;
+  onRestoreState: (state: AppState, dailyArchives?: Record<string, IntakeLogItem[]>) => void;
 }
 
 export const DataBackupModal: React.FC<DataBackupModalProps> = ({
@@ -24,13 +24,15 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
 
   if (!isOpen) return null;
 
-  // ユーザー要件: データ書き出し（JSONコピー）
+  // データ書き出し（当日・過去の全アーカイブを含むJSONコピー）
   const handleCopyJson = async () => {
+    setErrorMessage('');
     try {
-      const dataStr = JSON.stringify(appState, null, 2);
+      const payload = createBackupPayload(appState);
+      const dataStr = JSON.stringify(payload, null, 2);
       await navigator.clipboard.writeText(dataStr);
       setIsCopied(true);
-      setSuccessMessage('クリップボードにJSONデータを書き出しました！');
+      setSuccessMessage('全期間の記録を含むバックアップJSONをコピーしました！');
       setTimeout(() => {
         setIsCopied(false);
         setSuccessMessage('');
@@ -40,42 +42,31 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     }
   };
 
-  // ユーザー要件: データ取り込み（JSON復元）
+  // データ取り込み（新形式v2および旧形式JSONの後方互換復元）
   const handleImportJson = () => {
     setErrorMessage('');
     setSuccessMessage('');
     try {
-      if (!jsonInput.trim()) {
-        setErrorMessage('JSONテキストを入力してください。');
-        return;
-      }
-
-      const parsed: AppState = JSON.parse(jsonInput);
-
-      // バリデーション
-      if (
-        !parsed.target ||
-        !Array.isArray(parsed.presets) ||
-        !Array.isArray(parsed.todayLogs) ||
-        typeof parsed.lastActiveDate !== 'string'
-      ) {
-        throw new Error('データ形式が正しくありません。');
-      }
-
-      onRestoreState(parsed);
+      const parsed = parseBackupJson(jsonInput);
+      onRestoreState(parsed.appState, parsed.dailyArchives);
       setSuccessMessage('データを取り込み、正常に復元しました！');
       setJsonInput('');
       setTimeout(() => {
         onClose();
       }, 1200);
-    } catch (err: any) {
-      setErrorMessage(err.message || '有効なJSONデータを貼り付けてください。');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '有効なJSONデータを貼り付けてください。';
+      setErrorMessage(msg);
     }
   };
 
-  // 初期プリセットへの復元
+  // 初期プリセットへの復元（当日および過去の食事履歴は一切消去しない）
   const handleResetPresets = () => {
-    if (window.confirm('定番食材パーツを初期プリセット（8品）に戻しますか？（当日の記録は保持されます）')) {
+    if (
+      window.confirm(
+        '定番食材パーツを初期プリセット（8品）に戻しますか？（当日および過去の記録は保持されます）'
+      )
+    ) {
       const resetState: AppState = {
         ...appState,
         presets: DEFAULT_PRESETS,
@@ -119,8 +110,10 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             <h3 className="text-base font-bold text-white">データの保存 & 復元</h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            aria-label="閉じる"
           >
             <X className="w-5 h-5" />
           </button>
@@ -146,16 +139,16 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             <FileText className="w-4 h-4 text-sky-400" />
             <span>データ書き出し（JSONコピー）</span>
           </label>
-          <p className="text-[11px] text-slate-400">
-            現在の食材パーツ、目標設定、当日の記録をJSON形式でクリップボードへ書き出します。メモ帳や別端末へ保存できます。
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            現在の食材パーツ、目標設定、当日および過去の全記録をJSON形式でクリップボードへ書き出します。メモ帳への保管や別端末への移行に使えます。
           </p>
           <button
             type="button"
             onClick={handleCopyJson}
-            className="w-full py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 active:scale-98"
+            className="w-full min-h-[44px] py-2.5 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 active:scale-98"
           >
             {isCopied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-            <span>{isCopied ? 'コピー完了（書き出し成功）' : 'JSONデータをコピーする'}</span>
+            <span>{isCopied ? 'コピー完了（書き出し成功）' : '全データのJSONをコピーする'}</span>
           </button>
         </div>
 
@@ -165,8 +158,8 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             <Upload className="w-4 h-4 text-purple-400" />
             <span>データ取り込み（JSON復元）</span>
           </label>
-          <p className="text-[11px] text-slate-400">
-            コピーしたバックアップJSONテキストを貼り付けて復元します。
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            コピーしたバックアップJSONテキストを貼り付けて復元します（過去のバックアップ形式にも対応しています）。
           </p>
           <textarea
             rows={3}
@@ -179,7 +172,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             type="button"
             onClick={handleImportJson}
             disabled={!jsonInput.trim()}
-            className="w-full py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
+            className="w-full min-h-[44px] py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
           >
             <Upload className="w-4 h-4" />
             <span>JSONデータを取り込んで復元</span>
@@ -191,7 +184,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
           <button
             type="button"
             onClick={handleResetPresets}
-            className="w-full py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1.5"
+            className="w-full min-h-[44px] py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1.5"
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
             <span>定番パーツのみ初期状態（8品）に戻す</span>
@@ -202,7 +195,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             type="button"
             onClick={handleForceUpdate}
             disabled={isUpdating}
-            className="w-full py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-xs font-bold text-sky-400 hover:text-sky-300 transition-all flex items-center justify-center gap-2 active:scale-98 shadow-sm"
+            className="w-full min-h-[44px] py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 text-xs font-bold text-sky-400 hover:text-sky-300 transition-all flex items-center justify-center gap-2 active:scale-98 shadow-sm"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
             <span>{isUpdating ? '最新版を読み込み中...' : 'アプリを最新バージョンに更新（キャッシュ削除）'}</span>

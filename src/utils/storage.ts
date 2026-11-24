@@ -42,30 +42,30 @@ export const DEFAULT_PRESETS: PresetItem[] = [
   },
   {
     id: 'main-egg',
-    name: '全卵 1個',
+    name: '全卵',
     category: 'main',
     unit: '個',
-    baseAmount: 60,
+    baseAmount: 1,
     baseP: 7.4,
     baseF: 6.2,
     baseC: 0.2,
   },
   {
     id: 'main-mackerel',
-    name: '塩サバ 1切れ',
+    name: '塩サバ',
     category: 'main',
     unit: '切れ',
-    baseAmount: 80,
+    baseAmount: 1,
     baseP: 16.5,
     baseF: 13.5,
     baseC: 0.2,
   },
   {
     id: 'main-shishamo',
-    name: 'ししゃも 3尾',
+    name: 'ししゃも',
     category: 'main',
     unit: '尾',
-    baseAmount: 45,
+    baseAmount: 3,
     baseP: 6.8,
     baseF: 3.8,
     baseC: 0.3,
@@ -73,27 +73,27 @@ export const DEFAULT_PRESETS: PresetItem[] = [
   // 【副菜】
   {
     id: 'sub-natto',
-    name: '納豆 1パック',
+    name: '納豆',
     category: 'sub',
     unit: 'パック',
-    baseAmount: 45,
+    baseAmount: 1,
     baseP: 7.4,
     baseF: 5.0,
     baseC: 5.4,
   },
   {
     id: 'sub-mekabu',
-    name: 'めかぶ 1パック',
+    name: 'めかぶ',
     category: 'sub',
     unit: 'パック',
-    baseAmount: 45,
+    baseAmount: 1,
     baseP: 0.8,
     baseF: 0.2,
     baseC: 2.5,
   },
   {
     id: 'sub-oliveoil',
-    name: 'オリーブ油 小さじ1',
+    name: 'オリーブ油',
     category: 'sub',
     unit: 'g',
     baseAmount: 4,
@@ -129,19 +129,103 @@ export function getDefaultAppState(): AppState {
   };
 }
 
+// 旧初期プリセット（未編集データのみ対象）の自動マイグレーション定義
+const LEGACY_PRESET_MIGRATIONS: Record<
+  string,
+  {
+    oldName: string;
+    oldUnit: string;
+    oldBaseAmount: number;
+    newName: string;
+    newBaseAmount: number;
+  }
+> = {
+  'main-egg': {
+    oldName: '全卵 1個',
+    oldUnit: '個',
+    oldBaseAmount: 60,
+    newName: '全卵',
+    newBaseAmount: 1,
+  },
+  'main-mackerel': {
+    oldName: '塩サバ 1切れ',
+    oldUnit: '切れ',
+    oldBaseAmount: 80,
+    newName: '塩サバ',
+    newBaseAmount: 1,
+  },
+  'main-shishamo': {
+    oldName: 'ししゃも 3尾',
+    oldUnit: '尾',
+    oldBaseAmount: 45,
+    newName: 'ししゃも',
+    newBaseAmount: 3,
+  },
+  'sub-natto': {
+    oldName: '納豆 1パック',
+    oldUnit: 'パック',
+    oldBaseAmount: 45,
+    newName: '納豆',
+    newBaseAmount: 1,
+  },
+  'sub-mekabu': {
+    oldName: 'めかぶ 1パック',
+    oldUnit: 'パック',
+    oldBaseAmount: 45,
+    newName: 'めかぶ',
+    newBaseAmount: 1,
+  },
+  'sub-oliveoil': {
+    oldName: 'オリーブ油 小さじ1',
+    oldUnit: 'g',
+    oldBaseAmount: 4,
+    newName: 'オリーブ油',
+    newBaseAmount: 4,
+  },
+};
+
 /**
- * 旧バージョンからのデータ互換性を保ちつつ不足フィールドを補完する
+ * 旧バージョンからのデータ互換性を保ちつつ不足フィールド補完・未編集初期プリセット正規化を行う
  */
 export function normalizeAppState(state: AppState): AppState {
   const rawGoal = typeof state.weeklyGoalDays === 'number' ? state.weeklyGoalDays : 5;
   const clampedGoal = Math.min(7, Math.max(3, Math.round(rawGoal)));
 
+  let presetsMigrated = false;
+  const migratedPresets = Array.isArray(state.presets)
+    ? state.presets.map((preset) => {
+        const rule = LEGACY_PRESET_MIGRATIONS[preset.id];
+        if (
+          rule &&
+          preset.name === rule.oldName &&
+          preset.unit === rule.oldUnit &&
+          preset.baseAmount === rule.oldBaseAmount
+        ) {
+          presetsMigrated = true;
+          return {
+            ...preset,
+            name: rule.newName,
+            baseAmount: rule.newBaseAmount,
+          };
+        }
+        return preset;
+      })
+    : DEFAULT_PRESETS;
+
   return {
     ...state,
+    presets: presetsMigrated ? migratedPresets : state.presets,
     roughPresets: Array.isArray(state.roughPresets) ? state.roughPresets : DEFAULT_ROUGH_PRESETS,
     weeklyGoalDays: clampedGoal,
     restDays: Array.isArray(state.restDays) ? state.restDays : [],
   };
+}
+
+export interface BackupPayload {
+  version: 2;
+  exportedAt: string;
+  appState: AppState;
+  dailyArchives: Record<string, IntakeLogItem[]>;
 }
 
 /**
@@ -154,6 +238,115 @@ export function getDailyArchives(): Record<string, IntakeLogItem[]> {
   } catch {
     return {};
   }
+}
+
+/**
+ * 過去アーカイブ一覧（日付別ログ）を一括で安全に保存
+ */
+export function saveDailyArchives(archives: Record<string, IntakeLogItem[]>): void {
+  try {
+    localStorage.setItem(HISTORY_ARCHIVE_KEY, JSON.stringify(archives));
+  } catch (e) {
+    console.error('Failed to save daily archives:', e);
+  }
+}
+
+/**
+ * 過去アーカイブ込みのバックアップペイロード（v2）を生成
+ */
+export function createBackupPayload(appState: AppState): BackupPayload {
+  const archives = getDailyArchives();
+  const mergedArchives: Record<string, IntakeLogItem[]> = {
+    ...archives,
+    [appState.lastActiveDate]: Array.isArray(appState.todayLogs) ? appState.todayLogs : [],
+  };
+
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    appState,
+    dailyArchives: mergedArchives,
+  };
+}
+
+const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * バックアップJSON文字列を検証・パース（v2新形式および旧形式AppStateの両対応）
+ */
+export function parseBackupJson(
+  rawJson: string
+): { appState: AppState; dailyArchives?: Record<string, IntakeLogItem[]> } {
+  if (!rawJson || !rawJson.trim()) {
+    throw new Error('JSONテキストを入力してください。');
+  }
+
+  let parsedUnknown: unknown;
+  try {
+    parsedUnknown = JSON.parse(rawJson);
+  } catch {
+    throw new Error('JSONの構文が正しくありません。コピーした全文をそのまま貼り付けてください。');
+  }
+
+  if (!parsedUnknown || typeof parsedUnknown !== 'object' || Array.isArray(parsedUnknown)) {
+    throw new Error('バックアップデータの形式が正しくありません。');
+  }
+
+  const rootObj = parsedUnknown as Record<string, unknown>;
+  const isV2 =
+    'appState' in rootObj &&
+    rootObj.appState !== null &&
+    typeof rootObj.appState === 'object' &&
+    !Array.isArray(rootObj.appState);
+
+  const candidateState = (isV2 ? rootObj.appState : rootObj) as Partial<AppState>;
+
+  if (
+    !candidateState.target ||
+    typeof candidateState.target !== 'object' ||
+    typeof candidateState.target.calories !== 'number' ||
+    !Array.isArray(candidateState.presets) ||
+    !Array.isArray(candidateState.todayLogs) ||
+    typeof candidateState.lastActiveDate !== 'string' ||
+    !DATE_KEY_REGEX.test(candidateState.lastActiveDate.trim())
+  ) {
+    throw new Error(
+      'データ形式が正しくありません（目標設定・食材パーツ・記録データが見つかりません）。'
+    );
+  }
+
+  const validatedState: AppState = {
+    ...(candidateState as AppState),
+    lastActiveDate: candidateState.lastActiveDate.trim(),
+  };
+
+  if (isV2 && 'dailyArchives' in rootObj && rootObj.dailyArchives !== undefined) {
+    if (
+      rootObj.dailyArchives === null ||
+      typeof rootObj.dailyArchives !== 'object' ||
+      Array.isArray(rootObj.dailyArchives)
+    ) {
+      throw new Error('バックアップ内の過去履歴（dailyArchives）の形式が正しくありません。');
+    }
+
+    const rawArchives = rootObj.dailyArchives as Record<string, unknown>;
+    const sanitizedArchives: Record<string, IntakeLogItem[]> = {};
+    for (const [key, value] of Object.entries(rawArchives)) {
+      const trimmedKey = key.trim();
+      if (DATE_KEY_REGEX.test(trimmedKey) && Array.isArray(value)) {
+        sanitizedArchives[trimmedKey] = value as IntakeLogItem[];
+      }
+    }
+
+    return {
+      appState: validatedState,
+      dailyArchives: sanitizedArchives,
+    };
+  }
+
+  return {
+    appState: validatedState,
+  };
 }
 
 /**
@@ -294,6 +487,11 @@ export function loadAppState(): AppState {
       };
       saveAppState(updatedState);
       return updatedState;
+    }
+
+    // プリセットの自動マイグレーションが発生した場合は変換後の状態を永続化する
+    if (state.presets !== parsed.presets) {
+      saveAppState(state);
     }
 
     return state;

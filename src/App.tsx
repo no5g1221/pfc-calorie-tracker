@@ -7,6 +7,7 @@ import {
   normalizeAppState,
   getLogsForDate,
   saveLogsForDate,
+  saveDailyArchives,
   getDatesWithLogs,
   getMostRecentLoggedDateBefore,
 } from './utils/storage';
@@ -46,12 +47,21 @@ export function App() {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [isCelebrationVisible, setIsCelebrationVisible] = useState(false);
 
-  // 表示・記録対象の日付（YYYY-MM-DD）
-  const today = getTodayDateString();
+  // 表示・記録対象の日付（YYYY-MM-DD）および日付またぎ追従用ステート
+  const [today, setToday] = useState<string>(() => getTodayDateString());
+  const todayRef = useRef<string>(today);
+
+  useEffect(() => {
+    todayRef.current = today;
+  }, [today]);
+
   const [selectedDate, setSelectedDate] = useState<string>(today);
 
   // 現在記録中の食事区分（朝食 / 昼食 / 夕食 / 間食）
   const [activeMealType, setActiveMealType] = useState<MealType>(() => getDefaultMealType());
+
+  // 直前のログ変更を元に戻すためのスナップショット
+  const undoSnapshotRef = useRef<{ date: string; logs: IntakeLogItem[] } | null>(null);
 
   // モーダル表示状態
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -79,19 +89,27 @@ export function App() {
     return getLogsForDate(selectedDate, appState.todayLogs);
   }, [selectedDate, appState]);
 
-  // 初回または日付切替時に、既に100%を超えている項目を発火済みとしてマーク（画面表示直後の誤発火防止）
-  useEffect(() => {
-    if (!celebratedByDateRef.current[selectedDate]) {
+  // 指定日の目標達成発火フラグを現在のログ合計と整合させるヘルパー
+  const syncCelebratedForDate = useCallback(
+    (date: string, logs: IntakeLogItem[]) => {
       const set = new Set<MetricKey>();
-      const totals = calculateTotals(currentLogs);
+      const totals = calculateTotals(logs);
       const { target } = appState;
       if (target.calories > 0 && totals.totalCalories >= target.calories) set.add('calories');
       if (target.targetP > 0 && totals.totalP >= target.targetP) set.add('p');
       if (target.targetF > 0 && totals.totalF >= target.targetF) set.add('f');
       if (target.targetC > 0 && totals.totalC >= target.targetC) set.add('c');
-      celebratedByDateRef.current[selectedDate] = set;
+      celebratedByDateRef.current[date] = set;
+    },
+    [appState]
+  );
+
+  // 初回または日付切替時に、既に100%を超えている項目を発火済みとしてマーク（画面表示直後の誤発火防止）
+  useEffect(() => {
+    if (!celebratedByDateRef.current[selectedDate]) {
+      syncCelebratedForDate(selectedDate, currentLogs);
     }
-  }, [selectedDate, currentLogs, appState]);
+  }, [selectedDate, currentLogs, syncCelebratedForDate]);
 
   // 目標達成判定＆セレブレーション発火チェック
   const checkGoalAchievement = useCallback(
@@ -206,14 +224,17 @@ export function App() {
   // 日付変更の自動ハンドリング（起動時・可視状態復帰時・タイマー）
   useEffect(() => {
     const checkDateChange = () => {
-      const freshState = loadAppState();
-      setAppState((current) => {
-        if (freshState.lastActiveDate !== current.lastActiveDate) {
-          return freshState;
-        }
-        return current;
-      });
-      setActiveMealType(getDefaultMealType());
+      const currentToday = getTodayDateString();
+      if (currentToday !== todayRef.current) {
+        const prevToday = todayRef.current;
+        todayRef.current = currentToday;
+        setToday(currentToday);
+
+        const freshState = loadAppState();
+        setAppState(freshState);
+        setSelectedDate((prev) => (prev === prevToday ? currentToday : prev));
+        setActiveMealType(getDefaultMealType());
+      }
     };
 
     const handleVisibility = () => {
@@ -231,13 +252,34 @@ export function App() {
     };
   }, []);
 
-  const showToast = (text: string, subText?: string) => {
+  const showToast = useCallback((text: string, subText?: string, onUndo?: () => void) => {
     setToast({
       id: `${Date.now()}-${Math.random()}`,
       text,
       subText,
+      onUndo,
     });
-  };
+  }, []);
+
+  // 直前のログ操作を元に戻す（Undo）
+  const handleUndo = useCallback(() => {
+    const snapshot = undoSnapshotRef.current;
+    if (!snapshot) return;
+    undoSnapshotRef.current = null;
+
+    if (snapshot.date === todayRef.current) {
+      updateStateAndPersist((prev) => ({
+        ...prev,
+        todayLogs: snapshot.logs,
+      }));
+    } else {
+      saveLogsForDate(snapshot.date, snapshot.logs);
+      setAppState((prev) => ({ ...prev }));
+    }
+
+    syncCelebratedForDate(snapshot.date, snapshot.logs);
+    showToast('直前の操作を元に戻しました');
+  }, [updateStateAndPersist, syncCelebratedForDate, showToast]);
 
   // 前日へ
   const handlePrevDay = () => {
@@ -264,6 +306,7 @@ export function App() {
 
   // 1タップ加算
   const handleAddPresetToToday = (preset: PresetItem) => {
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
     const newLog = createLogFromPreset(preset, undefined, activeMealType);
     const updated = [newLog, ...currentLogs];
     checkGoalAchievement(currentLogs, updated);
@@ -273,12 +316,14 @@ export function App() {
     const mealLabel = meals.find((m) => m.id === activeMealType)?.label || '';
     showToast(
       `【${mealLabel}】に「${preset.name}」を追加`,
-      `+${cal} kcal (P:${newLog.currentP} F:${newLog.currentF} C:${newLog.currentC})`
+      `+${cal} kcal (P:${newLog.currentP} F:${newLog.currentF} C:${newLog.currentC})`,
+      handleUndo
     );
   };
 
   // 履歴の量や食事区分を再計算して更新
   const handleUpdateLogAmount = (id: string, newAmount: number, newMealType: MealType) => {
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
     const updated = currentLogs.map((log) => {
       if (log.id === id) {
         return recalculateLogItem(log, newAmount, newMealType);
@@ -287,21 +332,25 @@ export function App() {
     });
     checkGoalAchievement(currentLogs, updated);
     updateLogsForSelectedDate(updated);
-    showToast('記録を更新しました');
+    showToast('記録を更新しました', undefined, handleUndo);
   };
 
   // 履歴アイテム削除
   const handleDeleteLog = (id: string) => {
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
     const updated = currentLogs.filter((log) => log.id !== id);
+    syncCelebratedForDate(selectedDate, updated);
     updateLogsForSelectedDate(updated);
-    showToast('記録を削除しました');
+    showToast('記録を削除しました', undefined, handleUndo);
   };
 
   // 表示中日付の記録全消去（リセット時は発火フラグもクリア）
   const handleClearAllLogs = () => {
+    if (currentLogs.length === 0) return;
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
     celebratedByDateRef.current[selectedDate] = new Set<MetricKey>();
     updateLogsForSelectedDate([]);
-    showToast('この日の記録を全消去しました');
+    showToast('この日の記録を全消去しました', undefined, handleUndo);
   };
 
   // 目標設定の更新
@@ -369,6 +418,7 @@ export function App() {
   // 前回記録のコピー
   const handleCopyRecentLogs = () => {
     if (!recentLogInfo || recentLogInfo.logs.length === 0) return;
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
     const now = Date.now();
     const copied: IntakeLogItem[] = recentLogInfo.logs.map((log, idx) => ({
       ...log,
@@ -378,7 +428,7 @@ export function App() {
     const updated = [...copied, ...currentLogs];
     checkGoalAchievement(currentLogs, updated);
     updateLogsForSelectedDate(updated);
-    showToast(`前回の食事（${copied.length}品）をコピーしました`);
+    showToast(`前回の食事（${copied.length}品）をコピーしました`, undefined, handleUndo);
   };
 
   // 食材パーツ（プリセット）の作成・更新
@@ -407,20 +457,36 @@ export function App() {
 
   // 自由入力の追加
   const handleQuickAdd = (log: IntakeLogItem) => {
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
     const updated = [log, ...currentLogs];
     checkGoalAchievement(currentLogs, updated);
     updateLogsForSelectedDate(updated);
     const cal = calcCalories(log.currentP, log.currentF, log.currentC);
     const mealLabel = meals.find((m) => m.id === log.mealType)?.label || '';
-    showToast(`【${mealLabel}】に「${log.name}」を記録`, `+${cal} kcal`);
+    showToast(`【${mealLabel}】に「${log.name}」を記録`, `+${cal} kcal`, handleUndo);
   };
 
-  // バックアップ復元
-  const handleRestoreState = (newState: AppState) => {
+  // バックアップ復元（過去アーカイブ一括復元および現在日付との整合同期）
+  const handleRestoreState = (
+    newState: AppState,
+    dailyArchives?: Record<string, IntakeLogItem[]>
+  ) => {
+    undoSnapshotRef.current = null;
+    celebratedByDateRef.current = {};
+
+    if (dailyArchives) {
+      saveDailyArchives(dailyArchives);
+    }
+
     const normalized = normalizeAppState(newState);
-    setAppState(normalized);
     saveAppState(normalized);
-    setSelectedDate(normalized.lastActiveDate);
+
+    const synced = loadAppState();
+    const currentToday = getTodayDateString();
+    todayRef.current = currentToday;
+    setToday(currentToday);
+    setAppState(synced);
+    setSelectedDate(synced.lastActiveDate);
   };
 
   // 表示用AppState（サマリー表示にcurrentLogsを反映）
