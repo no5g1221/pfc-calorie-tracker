@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
-import { Settings, Database, PlusCircle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, RotateCcw, RefreshCw, BarChart3, Bell } from 'lucide-react';
+import React from 'react';
+import {
+  Settings,
+  Database,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  BarChart3,
+  Bell,
+} from 'lucide-react';
 import { getTodayDateString } from '../utils/calculations';
 
 interface HeaderProps {
@@ -9,7 +18,6 @@ interface HeaderProps {
   onNextDay: () => void;
   onGoToday: () => void;
   onOpenTargetModal: () => void;
-  onOpenQuickAdd: () => void;
   onOpenBackupModal: () => void;
   onOpenWeeklyReview: () => void;
   onOpenNotificationModal: () => void;
@@ -23,7 +31,6 @@ export const Header: React.FC<HeaderProps> = ({
   onNextDay,
   onGoToday,
   onOpenTargetModal,
-  onOpenQuickAdd,
   onOpenBackupModal,
   onOpenWeeklyReview,
   onOpenNotificationModal,
@@ -43,32 +50,9 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleReloadApp = async () => {
-    setIsRefreshing(true);
-    try {
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const r of registrations) {
-          await r.unregister();
-        }
-      }
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        for (const k of keys) {
-          await caches.delete(k);
-        }
-      }
-    } catch {
-      // ignore
-    }
-    window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
-  };
-
   return (
     <header className="space-y-2 pb-1">
-      {/* 1行目: アプリロゴ & 各種メニューボタン */}
+      {/* 1行目: アプリロゴ & 厳選4アイコン */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img
@@ -84,70 +68,47 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* アプリ更新ボタン */}
-          <button
-            type="button"
-            onClick={handleReloadApp}
-            disabled={isRefreshing}
-            className="p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-sky-400 transition-all duration-150 active:scale-95 shadow-sm"
-            title="アプリを最新版に更新"
-            aria-label="アプリ更新"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`} />
-          </button>
-
-          {/* 週間ふりかえりボタン */}
+          {/* 1. 週間ふりかえりボタン */}
           <button
             type="button"
             onClick={onOpenWeeklyReview}
-            className="p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/40 text-slate-300 hover:text-sky-400 transition-all duration-150 active:scale-95 shadow-sm"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/40 text-slate-300 hover:text-sky-400 transition-all duration-150 active:scale-95 shadow-sm"
             title="週間ふりかえり"
             aria-label="週間ふりかえり"
           >
             <BarChart3 className="w-4 h-4" />
           </button>
 
-          {/* 通知設定ボタン */}
+          {/* 2. 通知設定ボタン */}
           <button
             type="button"
             onClick={onOpenNotificationModal}
-            className="relative p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400 transition-all duration-150 active:scale-95 shadow-sm"
+            className="relative min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400 transition-all duration-150 active:scale-95 shadow-sm"
             title="通知リマインダー設定"
             aria-label="通知設定"
           >
             <Bell className="w-4 h-4" />
             {isNotificationEnabled && (
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
             )}
           </button>
 
-          {/* ざっくり・自由入力ボタン */}
-          <button
-            type="button"
-            onClick={onOpenQuickAdd}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all duration-150 active:scale-95 shadow-sm"
-            title="ざっくり / 自由入力"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">ざっくり/自由</span>
-          </button>
-
-          {/* バックアップボタン */}
+          {/* 3. バックアップボタン */}
           <button
             type="button"
             onClick={onOpenBackupModal}
-            className="p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white transition-all duration-150 active:scale-95 shadow-sm"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-white transition-all duration-150 active:scale-95 shadow-sm"
             title="データバックアップ・復元"
             aria-label="データ管理"
           >
             <Database className="w-4 h-4" />
           </button>
 
-          {/* 目標設定 歯車アイコン */}
+          {/* 4. 目標設定 歯車アイコン */}
           <button
             type="button"
             onClick={onOpenTargetModal}
-            className="p-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-sky-400 hover:border-sky-500/50 transition-all duration-150 active:scale-95 shadow-sm"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700 text-slate-300 hover:text-sky-400 hover:border-sky-500/50 transition-all duration-150 active:scale-95 shadow-sm"
             title="目標設定"
             aria-label="目標設定"
           >
@@ -157,12 +118,12 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* 2行目: 日付ナビゲーションバー（前日・翌日・カレンダーを開く） */}
-      <div className="flex items-center justify-between bg-slate-900/70 border border-slate-800/80 px-2 py-1.5 rounded-2xl shadow-sm">
+      <div className="flex items-center justify-between bg-slate-900/70 border border-slate-800/80 px-2 py-1 rounded-2xl shadow-sm">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onPrevDay}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-150 active:scale-95"
+            className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-150 active:scale-95"
             title="前日へ"
             aria-label="前日"
           >
@@ -173,7 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenCalendar}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl hover:bg-slate-800/80 transition-all duration-150 active:scale-95 group"
+            className="min-h-[36px] flex items-center gap-1.5 px-2.5 py-1 rounded-xl hover:bg-slate-800/80 transition-all duration-150 active:scale-95 group"
           >
             <CalendarIcon className="w-3.5 h-3.5 text-sky-400 group-hover:scale-110 transition-transform" />
             <span className="text-xs font-extrabold text-white tracking-tight">
@@ -184,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onNextDay}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-150 active:scale-95"
+            className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-150 active:scale-95"
             title="翌日へ"
             aria-label="翌日"
           >
@@ -197,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onGoToday}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[11px] font-bold hover:bg-amber-500/25 transition-all duration-150 active:scale-95 animate-in fade-in"
+            className="min-h-[36px] flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[11px] font-bold hover:bg-amber-500/25 transition-all duration-150 active:scale-95 animate-in fade-in"
           >
             <RotateCcw className="w-3 h-3" />
             <span>今日へ戻る</span>
@@ -206,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenCalendar}
-            className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-sky-500/10 transition-all duration-150 active:scale-95"
+            className="min-h-[36px] text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 px-2.5 py-1 rounded-xl hover:bg-sky-500/10 transition-all duration-150 active:scale-95"
           >
             <span>カレンダー</span>
           </button>

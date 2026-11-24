@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Zap, Sparkles, Coffee } from 'lucide-react';
 import type { AppState, IntakeLogItem, PresetItem, MealType, RoughPresetItem, ReminderSettings } from './types';
 import {
   DEFAULT_ROUGH_PRESETS,
   loadAppState,
   saveAppState,
   normalizeAppState,
+  getDailyArchives,
   getLogsForDate,
   saveLogsForDate,
   saveDailyArchives,
@@ -19,6 +21,7 @@ import {
   getDefaultMealType,
   getTodayDateString,
   getCurrentWeekDates,
+  getLastNDates,
   diffDays,
 } from './utils/calculations';
 import { Header } from './components/Header';
@@ -70,10 +73,21 @@ export function App() {
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddInitialTab, setQuickAddInitialTab] = useState<
+    'rough' | 'ai' | 'calories' | 'detail'
+  >('rough');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [selectedLogForEdit, setSelectedLogForEdit] = useState<IntakeLogItem | null>(null);
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(() =>
     loadReminderSettings()
+  );
+
+  const openQuickAdd = useCallback(
+    (tab: 'rough' | 'ai' | 'calories' | 'detail' = 'rough') => {
+      setQuickAddInitialTab(tab);
+      setIsQuickAddOpen(true);
+    },
+    []
   );
 
   const roughPresets = appState.roughPresets ?? DEFAULT_ROUGH_PRESETS;
@@ -194,6 +208,29 @@ export function App() {
     if (!recentLogInfo) return null;
     return diffDays(recentLogInfo.date, today);
   }, [recentLogInfo, today]);
+
+  // 直近30日分のログから定番パーツの使用頻度を集計（当日の二重カウント防止マージ）
+  const presetUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const archives = getDailyArchives();
+    const mergedByDate: Record<string, IntakeLogItem[]> = {
+      ...archives,
+      [today]: appState.todayLogs,
+    };
+    const last30Dates = getLastNDates(30, today);
+
+    for (const dateStr of last30Dates) {
+      const logs = mergedByDate[dateStr];
+      if (!Array.isArray(logs)) continue;
+      for (const log of logs) {
+        if (log.presetId) {
+          counts[log.presetId] = (counts[log.presetId] || 0) + 1;
+        }
+      }
+    }
+
+    return counts;
+  }, [today, appState]);
 
   // 状態変更時のLocalStorage同期
   const updateStateAndPersist = useCallback((updater: (prev: AppState) => AppState) => {
@@ -517,7 +554,6 @@ export function App() {
           onNextDay={handleNextDay}
           onGoToday={handleGoToday}
           onOpenTargetModal={() => setIsTargetModalOpen(true)}
-          onOpenQuickAdd={() => setIsQuickAddOpen(true)}
           onOpenBackupModal={() => setIsBackupOpen(true)}
           onOpenWeeklyReview={() => setIsWeeklyReviewOpen(true)}
           onOpenNotificationModal={() => setIsNotificationModalOpen(true)}
@@ -525,7 +561,7 @@ export function App() {
         />
       </div>
 
-      {/* 固定グラスモーフィズム ダッシュボードヘッダー（カロリー＆PFC集計カード） */}
+      {/* ダッシュボードヘッダー（通常フロー配置＋スクロールアウト時のみスリム固定バー表示） */}
       <DashboardHeader
         appState={displayState}
         onOpenTargetModal={() => setIsTargetModalOpen(true)}
@@ -534,7 +570,7 @@ export function App() {
       />
 
       {/* メインスクロールエリア */}
-      <main className="w-full max-w-md mx-auto px-4 pt-3 pb-16 space-y-3.5 flex-1">
+      <main className="w-full max-w-md mx-auto px-4 pt-3 pb-28 space-y-3.5 flex-1">
         {/* 今週のゆる継続スタンプバー */}
         <HabitStrip
           weekDates={weekDates}
@@ -551,7 +587,7 @@ export function App() {
             daysSinceLastLog={daysSinceLastLog}
             recentLogInfo={recentLogInfo}
             onCopyRecentLogs={handleCopyRecentLogs}
-            onOpenRoughAdd={() => setIsQuickAddOpen(true)}
+            onOpenRoughAdd={() => openQuickAdd('rough')}
             onMarkRestDay={handleToggleRestDay}
           />
         )}
@@ -563,10 +599,11 @@ export function App() {
           todayLogs={currentLogs}
         />
 
-        {/* 定番パーツ一覧（1タップ加算） */}
+        {/* 定番パーツ一覧（1タップ加算・よく使う順） */}
         <PresetGrid
           presets={appState.presets}
           todayLogs={currentLogs}
+          usageCounts={presetUsageCounts}
           onAddPresetToToday={handleAddPresetToToday}
           onOpenManageModal={() => setIsManageModalOpen(true)}
         />
@@ -579,6 +616,42 @@ export function App() {
           onClearAll={handleClearAllLogs}
         />
       </main>
+
+      {/* 下部固定アクションバー（親指ゾーン最適化） */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 shadow-[0_-4px_20px_rgba(0,0,0,0.4)] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="w-full max-w-md mx-auto px-3 pt-2 grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => openQuickAdd('rough')}
+            className="min-h-[44px] rounded-xl text-xs font-extrabold transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-200"
+          >
+            <Zap className="w-4 h-4 shrink-0" />
+            <span>ざっくり</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openQuickAdd('ai')}
+            className="min-h-[44px] rounded-xl text-xs font-extrabold transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-200"
+          >
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span>AI検索</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleRestDay}
+            className={`min-h-[44px] rounded-xl text-xs font-extrabold transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
+              isSelectedRestDay
+                ? 'bg-purple-600 text-white border border-purple-400/60 shadow-md'
+                : 'bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-300'
+            }`}
+          >
+            <Coffee className="w-4 h-4 shrink-0" />
+            <span>{isSelectedRestDay ? 'お休み中' : 'お休み'}</span>
+          </button>
+        </div>
+      </div>
 
       {/* モーダル群 */}
       {/* 0. カレンダーモーダル */}
@@ -639,6 +712,7 @@ export function App() {
       <QuickAddModal
         isOpen={isQuickAddOpen}
         defaultMealType={activeMealType}
+        initialTab={quickAddInitialTab}
         target={appState.target}
         roughPresets={roughPresets}
         isRestDay={isSelectedRestDay}

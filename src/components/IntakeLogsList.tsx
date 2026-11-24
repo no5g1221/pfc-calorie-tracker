@@ -94,20 +94,20 @@ export const IntakeLogsList: React.FC<IntakeLogsListProps> = ({
                 className="bg-slate-900/70 border border-slate-800/80 rounded-2xl overflow-hidden shadow-md"
               >
                 {/* 食事ヘッダー: 区分名 & その食事の小計カロリー・PFC */}
-                <div className="px-3.5 py-2.5 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base">{section.icon}</span>
-                    <span className="text-xs font-bold text-white">{section.label}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">
+                <div className="px-3.5 py-2.5 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-base shrink-0">{section.icon}</span>
+                    <span className="text-xs font-bold text-white shrink-0">{section.label}</span>
+                    <span className="text-[10px] text-slate-400 font-medium shrink-0">
                       ({mealItems.length}品)
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 text-right">
-                    <span className="text-xs font-extrabold text-orange-400">
+                  <div className="flex items-center gap-2 text-right shrink-0">
+                    <span className="text-xs font-extrabold text-orange-400 shrink-0">
                       {totals.totalCalories} <span className="text-[10px] font-normal text-slate-400">kcal</span>
                     </span>
-                    <div className="hidden xs:flex items-center gap-1 text-[10px] font-mono text-slate-400">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 shrink-0">
                       <span className="text-sky-400 font-bold">P:{totals.totalP}</span>
                       <span className="text-amber-400 font-bold">F:{totals.totalF}</span>
                       <span className="text-emerald-400 font-bold">C:{totals.totalC}</span>

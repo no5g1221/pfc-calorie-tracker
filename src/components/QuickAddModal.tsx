@@ -35,6 +35,7 @@ import {
 interface QuickAddModalProps {
   isOpen: boolean;
   defaultMealType: MealType;
+  initialTab?: 'rough' | 'ai' | 'calories' | 'detail';
   target: AppState['target'];
   roughPresets: RoughPresetItem[];
   isRestDay: boolean;
@@ -70,6 +71,7 @@ const emojiSuggestions = ['🍱', '🍜', '🍝', '🥪', '🍺', '🍰', '🥗'
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   isOpen,
   defaultMealType,
+  initialTab = 'rough',
   target,
   roughPresets,
   isRestDay,
@@ -81,7 +83,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   onResetRoughPresets,
   onToggleRestDay,
 }) => {
-  const [activeTab, setActiveTab] = useState<ModalTab>('rough');
+  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
   const [mealType, setMealType] = useState<MealType>(defaultMealType);
 
   // ざっくりタブ用ステート
@@ -121,7 +123,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setMealType(defaultMealType);
-      setActiveTab('rough');
+      setActiveTab(initialTab);
       setRoughView('pick');
       setScaleKey('normal');
       setAiResult(null);
@@ -134,7 +136,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       setAiC('');
       setSaveAsPreset(false);
     }
-  }, [isOpen, defaultMealType]);
+  }, [isOpen, defaultMealType, initialTab]);
 
   if (!isOpen) return null;
 
