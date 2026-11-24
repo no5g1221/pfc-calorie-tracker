@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Zap, Sparkles, Coffee } from 'lucide-react';
-import type { AppState, IntakeLogItem, PresetItem, MealType, RoughPresetItem, ReminderSettings } from './types';
+import type {
+  AppState,
+  IntakeLogItem,
+  PresetItem,
+  MealType,
+  RoughPresetItem,
+  ReminderSettings,
+  MealComboEntry,
+  MealComboItem,
+} from './types';
 import {
   DEFAULT_ROUGH_PRESETS,
   loadAppState,
@@ -93,6 +102,7 @@ export function App() {
   const roughPresets = appState.roughPresets ?? DEFAULT_ROUGH_PRESETS;
   const weeklyGoalDays = appState.weeklyGoalDays ?? 5;
   const restDays = appState.restDays ?? [];
+  const mealCombos = appState.mealCombos ?? [];
   const isSelectedRestDay = restDays.includes(selectedDate);
 
   // 日付ごとの目標達成演出発火済みフラグ（微調整による再発火防止）
@@ -492,6 +502,87 @@ export function App() {
     showToast('食材パーツを削除しました');
   };
 
+  // マイ定食（コンボ）の保存
+  const handleSaveMealCombo = (comboName: string, items: IntakeLogItem[]) => {
+    const trimmedName = comboName.trim();
+    if (!trimmedName || items.length === 0) return;
+
+    const now = Date.now();
+    const entries: MealComboEntry[] = items.map((item) => ({
+      presetId: item.presetId,
+      name: item.name,
+      unit: item.unit,
+      baseAmount: item.baseAmount,
+      currentAmount: item.currentAmount,
+      baseP: item.baseP,
+      baseF: item.baseF,
+      baseC: item.baseC,
+      currentP: item.currentP,
+      currentF: item.currentF,
+      currentC: item.currentC,
+      isRough: item.isRough,
+    }));
+
+    const newCombo: MealComboItem = {
+      id: `combo-${now}-${Math.random().toString(36).substring(2, 7)}`,
+      name: trimmedName,
+      items: entries,
+      createdAt: now,
+    };
+
+    updateStateAndPersist((prev) => ({
+      ...prev,
+      mealCombos: [newCombo, ...(prev.mealCombos ?? [])],
+    }));
+    showToast(`マイ定食「${trimmedName}」を保存しました`, `${entries.length}品を登録`);
+  };
+
+  // マイ定食（コンボ）の削除
+  const handleDeleteMealCombo = (id: string) => {
+    updateStateAndPersist((prev) => ({
+      ...prev,
+      mealCombos: (prev.mealCombos ?? []).filter((combo) => combo.id !== id),
+    }));
+    showToast('マイ定食を削除しました');
+  };
+
+  // マイ定食（コンボ）の1タップ一括投入（Undo連携）
+  const handleAddMealCombo = (combo: MealComboItem) => {
+    if (combo.items.length === 0) return;
+
+    undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
+    const now = Date.now();
+    const newLogs: IntakeLogItem[] = combo.items.map((entry, idx) => ({
+      presetId: entry.presetId,
+      name: entry.name,
+      unit: entry.unit,
+      baseAmount: entry.baseAmount,
+      currentAmount: entry.currentAmount,
+      baseP: entry.baseP,
+      baseF: entry.baseF,
+      baseC: entry.baseC,
+      currentP: entry.currentP,
+      currentF: entry.currentF,
+      currentC: entry.currentC,
+      isRough: entry.isRough,
+      id: `${now}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: now,
+      mealType: activeMealType,
+    }));
+
+    const updated = [...newLogs, ...currentLogs];
+    checkGoalAchievement(currentLogs, updated);
+    updateLogsForSelectedDate(updated);
+
+    const totals = calculateTotals(newLogs);
+    const mealLabel = meals.find((m) => m.id === activeMealType)?.label || '';
+    showToast(
+      `【${mealLabel}】に「${combo.name}」を追加`,
+      `${newLogs.length}品 / +${totals.totalCalories} kcal`,
+      handleUndo
+    );
+  };
+
   // 自由入力の追加
   const handleQuickAdd = (log: IntakeLogItem) => {
     undoSnapshotRef.current = { date: selectedDate, logs: currentLogs };
@@ -599,13 +690,16 @@ export function App() {
           todayLogs={currentLogs}
         />
 
-        {/* 定番パーツ一覧（1タップ加算・よく使う順） */}
+        {/* 定番パーツ・マイ定食一覧（1タップ加算・よく使う順） */}
         <PresetGrid
           presets={appState.presets}
           todayLogs={currentLogs}
           usageCounts={presetUsageCounts}
+          mealCombos={mealCombos}
           onAddPresetToToday={handleAddPresetToToday}
           onOpenManageModal={() => setIsManageModalOpen(true)}
+          onAddMealCombo={handleAddMealCombo}
+          onDeleteMealCombo={handleDeleteMealCombo}
         />
 
         {/* 選択中の日の記録一覧（朝・昼・晩・間食ごとの小計＆一覧） */}
@@ -614,6 +708,7 @@ export function App() {
           onOpenEditModal={(log) => setSelectedLogForEdit(log)}
           onDeleteLog={handleDeleteLog}
           onClearAll={handleClearAllLogs}
+          onSaveMealCombo={handleSaveMealCombo}
         />
       </main>
 

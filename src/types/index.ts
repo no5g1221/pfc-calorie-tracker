@@ -47,6 +47,30 @@ export interface IntakeLogItem {
   isRough?: boolean;      // ざっくり記録・カロリーのみ入力フラグ
 }
 
+// マイ定食（コンボ）の1品目スナップショット型定義
+export interface MealComboEntry {
+  presetId?: string;
+  name: string;
+  unit: string;
+  baseAmount: number;
+  currentAmount: number;
+  baseP: number;
+  baseF: number;
+  baseC: number;
+  currentP: number;
+  currentF: number;
+  currentC: number;
+  isRough?: boolean;
+}
+
+// マイ定食（コンボ）の型定義
+export interface MealComboItem {
+  id: string;
+  name: string;
+  items: MealComboEntry[];
+  createdAt: number;
+}
+
 // アプリ全体のLocalStorage保存型定義
 export interface AppState {
   lastActiveDate: string; // YYYY-MM-DD（日付判定用）
@@ -64,6 +88,7 @@ export interface AppState {
   roughPresets?: RoughPresetItem[]; // ざっくり記録用メニュー（未設定時はデフォルト8種で補完）
   weeklyGoalDays?: number;          // 週のゆる記録目標日数（デフォルト5日）
   restDays?: string[];              // お休み・チートデイに設定した日付配列 (YYYY-MM-DD)
+  mealCombos?: MealComboItem[];     // 1食分をまとめて登録できるマイ定食（コンボ）
 }
 
 export type CategoryType = 'staple' | 'main' | 'sub';

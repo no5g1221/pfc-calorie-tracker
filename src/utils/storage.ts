@@ -1,4 +1,4 @@
-import type { AppState, IntakeLogItem, PresetItem, RoughPresetItem } from '../types';
+import type { AppState, IntakeLogItem, MealComboItem, PresetItem, RoughPresetItem } from '../types';
 import { calcTargetMacros, calculateTotals, getTodayDateString } from './calculations';
 
 export const STORAGE_KEY = 'pfc_tracker_app_state';
@@ -126,6 +126,7 @@ export function getDefaultAppState(): AppState {
     roughPresets: DEFAULT_ROUGH_PRESETS,
     weeklyGoalDays: 5,
     restDays: [],
+    mealCombos: [],
   };
 }
 
@@ -212,12 +213,24 @@ export function normalizeAppState(state: AppState): AppState {
       })
     : DEFAULT_PRESETS;
 
+  const safeMealCombos: MealComboItem[] = Array.isArray(state.mealCombos)
+    ? state.mealCombos.filter(
+        (combo): combo is MealComboItem =>
+          combo !== null &&
+          typeof combo === 'object' &&
+          typeof combo.id === 'string' &&
+          typeof combo.name === 'string' &&
+          Array.isArray(combo.items)
+      )
+    : [];
+
   return {
     ...state,
     presets: presetsMigrated ? migratedPresets : state.presets,
     roughPresets: Array.isArray(state.roughPresets) ? state.roughPresets : DEFAULT_ROUGH_PRESETS,
     weeklyGoalDays: clampedGoal,
     restDays: Array.isArray(state.restDays) ? state.restDays : [],
+    mealCombos: safeMealCombos,
   };
 }
 
